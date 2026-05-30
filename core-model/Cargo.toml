@@ -1,0 +1,43 @@
+[package]
+name = "core-model"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Core internal tag model for OPC UA PLC bridge. Provides tag types, quality, timestamps and a thread-safe tag store with minimal locking."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+documentation = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/core-model"
+readme = "../README.md"
+[lib]
+name = "core_model"
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+# Arc-swap provides an efficient lock-free pointer swap useful for per-tag handles.
+arc-swap = "1.5"
+
+# Serde for (de)serialization of tag definitions and config-friendly types (required)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Small, ergonomic error types
+thiserror = "2.0"
+
+# Lightweight logging/tracing integration points
+tracing = "0.1"
+
+# Use system time types from std; chrono only for convenience serializing if needed.
+chrono = { version = "0.4", features = ["serde"] }
+
+
+
+[features]
+# Minimal default feature set. Consumers (runtime/opcua/drivers) can enable serde for persistence or config export.
+default = []
+
+[package.metadata]
+maintainers = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+keywords = ["opcua", "plc", "tags", "industrial", "core-model"]
+categories = ["embedded", "network-programming"]

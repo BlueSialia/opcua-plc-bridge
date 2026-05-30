@@ -1,0 +1,72 @@
+name: Release PR
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-pr:
+    name: Create release PR
+    if: "startsWith(github.event.head_commit.message, 'chore: release') != true"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-edit,git-cliff
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          if git log $RANGE --oneline | grep -qP '^[a-f0-9]+ .+?!:'; then
+            BUMP="major"
+          elif git log $RANGE --oneline | grep -qP '^[a-f0-9]+ feat'; then
+            BUMP="minor"
+          elif git log $RANGE --oneline | grep -qP '^[a-f0-9]+ fix'; then
+            BUMP="patch"
+          else
+            BUMP="patch"
+          fi
+
+          echo "level=$BUMP" >> $GITHUB_OUTPUT
+          echo "Bump level: $BUMP"
+
+      - name: Bump crate versions
+        run: |
+          cargo set-version --bump ${{ steps.bump.outputs.level }} --workspace
+
+      - name: Update changelog
+        run: |
+          VERSION=$(grep '^version' runtime/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          git cliff --tag "v$VERSION" -o CHANGELOG.md
+
+      - name: Commit and create PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: release"
+          branch: release/auto
+          title: "chore: release"
+          body: |
+            Automated release PR.
+
+            - Versions bumped (${{ steps.bump.outputs.level }})
+            - CHANGELOG.md updated
+          labels: release
+          delete-branch: true

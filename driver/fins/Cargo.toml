@@ -1,0 +1,55 @@
+[package]
+name = "driver-fins"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Omron FINS over TCP driver for the opcua-plc-bridge"
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+documentation = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/driver/fins"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+readme = "../../README.md"
+
+[lib]
+name = "driver_fins"
+path = "src/lib.rs"
+
+[dependencies]
+# Core internal model (workspace member)
+core-model.workspace = true
+
+# Shared driver trait crate (common utilities for all drivers)
+driver-common.workspace = true
+
+# Async runtime for TCP and scheduling
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "sync"] }
+
+# Byte buffers and utilities
+bytes = "1"
+byteorder = "1"
+
+# Async trait helper for trait objects with async functions
+async-trait = "0.1"
+
+# Errors
+thiserror = "2.0"
+
+# Chrono for timestamps (used by the driver)
+chrono = { version = "0.4", features = ["serde"] }
+
+# (De)serialization for configuration helpers, tests, debug
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Tracing/logging
+tracing = "0.1"
+
+
+
+[features]
+default = ["native"]
+native = []
+
+[package.metadata]
+keywords = ["fins", "omron", "plc", "driver", "opcua"]
+categories = ["network-programming", "embedded"]

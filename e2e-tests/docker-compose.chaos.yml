@@ -1,0 +1,88 @@
+# Fault injection / chaos testing.
+#
+# Same services as the regular test suite, but the bridge's Modbus
+# traffic to the pymodbus emulator is routed through a chaos proxy
+# that can inject packet loss, latency, and disconnections via
+# `tc netem`. The stdlib Modbus server connects directly so we can
+# verify that only the affected PLC's tags go Bad.
+#
+# Architecture:
+#   [bridge] --→ [chaos:502] --→ [modbus-pymodbus:502]    (pymodbus)
+#   [bridge] --→ [modbus-stdlib:502]                  (direct)
+#                     ↑
+#               tc netem rules
+#               applied from chaos-test
+
+services:
+  modbus-pymodbus:
+    build: ./modbus-emulators/pymodbus
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.socket(); s.connect(('127.0.0.1',502)); s.close()",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  modbus-stdlib:
+    build: ./modbus-emulators/stdlib
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.socket(); s.connect(('127.0.0.1',502)); s.close()",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  chaos:
+    build: ./chaos
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      modbus-pymodbus:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - modbus-pymodbus # bridge resolves "modbus-pymodbus" → chaos proxy
+
+  bridge:
+    build:
+      context: ..
+      dockerfile: e2e-tests/bridge/Dockerfile
+    depends_on:
+      - chaos
+      - modbus-stdlib
+    ports:
+      - "4840:4840"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "4840"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s
+
+  chaos-test:
+    build:
+      context: .
+      dockerfile: chaos/Dockerfile.test
+    network_mode: "service:chaos"
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - NODE_PATH=/app/node_modules
+    depends_on:
+      bridge:
+        condition: service_healthy
+    volumes:
+      - ./opcua-clients/node-opcua/test-runner.js:/scripts/test-runner.js:ro
+      - ./chaos/run-scenarios.sh:/scripts/run-scenarios.sh:ro
+    entrypoint: ["/scripts/run-scenarios.sh"]

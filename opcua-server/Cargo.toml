@@ -1,0 +1,43 @@
+[package]
+name = "opcua-server"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "OPC UA adapter server: exposes TagRegistry as OPC UA nodes and forwards writes into the runtime."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+documentation = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/opcua-server"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+readme = "../README.md"
+
+[lib]
+name = "opcua_server"
+path = "src/lib.rs"
+
+[dependencies]
+# Internal workspace crate providing TagRegistry, TagStore, TagValue, etc.
+core-model.workspace = true
+
+# Async runtime and utilities
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+tracing = "0.1"
+thiserror = "2.0"
+
+# Serde for config + diagnostics export
+serde = { version = "1.0", features = ["derive"] }
+
+# Native Open62541 binding. This crate requires the native open62541 Rust crate
+# and associated native toolchain to build and run the production OPC UA server.
+# The mbedtls feature enables TLS/certificate-based security (encrypted channels).
+open62541 = { version = "0.10.1", features = ["mbedtls"] }
+
+# For graceful shutdown coordination and select-style futures
+futures = "0.3"
+
+# Chrono for DateTime conversion support
+chrono = "0.4"
+
+[package.metadata]
+maintainers = ["BlueSialia <bluesialia@gmail.com>"]
+keywords = ["opcua", "opc.tcp", "industrial", "plc", "bridge"]
+categories = ["network-programming", "embedded"]

@@ -1,0 +1,53 @@
+[package]
+name = "runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Runtime coordinator: loads configuration, spawns protocol drivers, starts OPC UA server and exposes health & lifecycle management."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+documentation = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/runtime"
+authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+readme = "../README.md"
+
+# This crate is the application entrypoint (binary)
+[[bin]]
+name = "opcua-plc-bridge"
+path = "src/main.rs"
+
+[dependencies]
+# Internal workspace crates
+core-model.workspace = true
+driver-fins.workspace = true
+driver-modbus.workspace = true
+driver-common.workspace = true
+opcua-server.workspace = true
+
+# Async runtime and utilities
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+async-trait = "0.1"
+
+# Configuration parsing (support TOML and YAML)
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+toml = "1"
+
+# Timestamps and durations for staleness checks
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Utilities added for runtime improvements
+rand = "0.10"
+dashmap = "6"
+
+# CLI & daemonization
+clap = { version = "4", features = ["derive"] }
+
+# Async future combinators (BoxFuture, FutureExt)
+futures = "0.3"

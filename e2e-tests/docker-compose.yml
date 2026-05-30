@@ -1,0 +1,75 @@
+# End-to-end happy-path test.
+#
+# Spins up two Modbus emulators with different implementations, the
+# bridge pointing at both, and two OPC UA clients (node-opcua and
+# asyncua) that independently read tags and assert values.
+#
+# Using two independent libraries for each protocol layer catches bugs
+# that a single implementation might have.
+
+services:
+  # ── Modbus emulators (two independent implementations) ────────
+
+  modbus-pymodbus:
+    build: ./modbus-emulators/pymodbus
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.socket(); s.connect(('127.0.0.1',502)); s.close()",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  modbus-stdlib:
+    build: ./modbus-emulators/stdlib
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import socket; s=socket.socket(); s.connect(('127.0.0.1',502)); s.close()",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  # ── Bridge ─────────────────────────────────────────────────────
+
+  bridge:
+    build:
+      context: ..
+      dockerfile: e2e-tests/bridge/Dockerfile
+    depends_on:
+      modbus-pymodbus:
+        condition: service_healthy
+      modbus-stdlib:
+        condition: service_healthy
+    ports:
+      - "4840:4840"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "4840"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s
+
+  # ── OPC UA clients (two independent implementations) ──────────
+
+  opcua-client-node:
+    build: ./opcua-clients/node-opcua
+    profiles: [node]
+    depends_on:
+      bridge:
+        condition: service_healthy
+
+  opcua-client-python:
+    build: ./opcua-clients/asyncua
+    profiles: [python]
+    depends_on:
+      bridge:
+        condition: service_healthy

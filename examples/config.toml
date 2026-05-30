@@ -1,0 +1,181 @@
+# Example configuration for opcua-plc-bridge runtime
+# Format: TOML
+
+# ── Top-level runtime settings ───────────────────────────────────────────────
+# Optional global overrides (defaults shown in comments):
+# health_channel_capacity = 128       # internal health mpsc channel capacity
+# driver_write_send_timeout_ms = 2000 # timeout enqueuing writes to driver queues
+# write_confirm_timeout_ms = 5000     # timeout waiting for driver write confirmation
+
+# ── OPC UA server ────────────────────────────────────────────────────────────
+[opcua]
+bind_addr = "0.0.0.0"
+port = 4840
+application_name = "OPC UA PLC bridge"
+application_uri = "urn:opcua:plc:bridge"
+namespace_uri = "urn:opcua:plc:bridge:ns"
+
+# Client session limits
+max_sessions = 100
+max_subscriptions = 1000
+
+# Authentication
+anonymous_enabled = true
+username_password_enabled = false
+
+# Write acknowledgement: "ConfirmedAck" (wait for driver) or "QueuedAck" (fire-and-forget)
+write_mode = "ConfirmedAck"
+
+# Security: "None", "Sign", or "SignAndEncrypt"
+# security_mode = "None"
+# security_policy = "None"
+
+# Optional: X.509 certificate configuration (required if security_mode != None)
+# server_certificate_path = "/path/to/server_cert.der"
+# server_private_key_path = "/path/to/server_key.der"
+# trust_store_dir = "/path/to/trust_store/"
+
+# ── PLC definitions ──────────────────────────────────────────────────────────
+# Each [[plcs]] block defines a PLC and its tags.
+# Supported protocols: "fins", "modbus"
+#
+# Fields per PLC:
+#   name         - logical name for this PLC (used in OPC UA browse tree)
+#   protocol     - "fins" or "modbus"
+#   endpoint     - TCP socket address (host:port)
+#   cycle_ms     - poll interval in milliseconds (min 10)
+#   unit_id      - Modbus slave/unit id (1-255); Ignored for FINS.
+#   max_words_per_request - (FINS only) max words per read/write command (default 960)
+#
+# Fields per tag:
+#   id           - stable OPC UA NodeId string (e.g. "ns=1;s=PLC1.TagName")
+#   name         - human-friendly display name shown to OPC UA clients
+#   address      - protocol-specific address (see notes below)
+#   data_type    - one of: Bool, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+#                         Float, Double, String, DateTime, ByteString
+#   writable     - whether OPC UA clients can write this tag (default false)
+#   byte_order   - byte ordering for multi-register values:
+#                  ABCD, BADC, CDAB, DCBA (default ABCD)
+#   word_count   - number of 16-bit words for this value (default 1)
+#   area         - (FINS only) explicit memory area code, e.g. 0x82 for D-area;
+#                  if omitted, inferred from address string convention
+#
+# FINS address strings:
+#   - "D100" or "d100" → D memory area, word 100
+#   - "100"            → D memory area, word 100
+#   - When `area` is set, address is a raw numeric offset within that area
+#
+# Modbus address strings:
+#   - "0"      → holding register 0
+#   - "40001"  → holding register 0 (human notation, auto-subtracts 40001)
+#   - Booleans default to coils, other types default to holding registers
+
+# ── FINS example ─────────────────────────────────────────────────────────────
+[[plcs]]
+name = "OmronPLC"
+protocol = "fins"
+endpoint = "192.168.100.50:9600"
+cycle_ms = 100
+
+# 16-bit unsigned integer, readable/writable
+[[plcs.tags]]
+id = "ns=1;s=OmronPLC.MotorSpeed"
+name = "MotorSpeed"
+address = "D100"
+data_type = "UInt16"
+writable = true
+
+# Boolean flag, read-only, extracted from bit 3 of D101
+[[plcs.tags]]
+id = "ns=1;s=OmronPLC.StatusFlag"
+name = "StatusFlag"
+address = "D101"
+data_type = "Bool"
+writable = false
+
+# 32-bit float spanning two words (D102-D103), with CDAB byte order
+[[plcs.tags]]
+id = "ns=1;s=OmronPLC.Temperature"
+name = "Temperature"
+address = "D102"
+data_type = "Float"
+writable = false
+byte_order = "CDAB"
+word_count = 2
+
+# String tag spanning 8 words (D104-D111), read-only
+[[plcs.tags]]
+id = "ns=1;s=OmronPLC.ProductName"
+name = "ProductName"
+address = "D104"
+data_type = "String"
+writable = false
+word_count = 8
+
+# Using explicit area for CIO memory (0x83) instead of default D-area
+[[plcs.tags]]
+id = "ns=1;s=OmronPLC.IOSlot"
+name = "IOSlot"
+address = "50"
+data_type = "UInt16"
+writable = false
+area = 0x83
+
+# ── Modbus example ───────────────────────────────────────────────────────────
+[[plcs]]
+name = "ModbusPLC"
+protocol = "modbus"
+endpoint = "192.168.200.20:502"
+cycle_ms = 200
+unit_id = 1
+
+# Float stored as two holding registers (300-301), CDAB byte order
+[[plcs.tags]]
+id = "ns=1;s=ModbusPLC.Pressure"
+name = "Pressure"
+address = "300"
+data_type = "Float"
+writable = false
+byte_order = "CDAB"
+word_count = 2
+
+# Boolean coil (address 0)
+[[plcs.tags]]
+id = "ns=1;s=ModbusPLC.StartCmd"
+name = "StartCmd"
+address = "0"
+data_type = "Bool"
+writable = true
+
+# 16-bit unsigned holding register at address 100
+[[plcs.tags]]
+id = "ns=1;s=ModbusPLC.Setpoint"
+name = "Setpoint"
+address = "100"
+data_type = "UInt16"
+writable = true
+
+# Double (64-bit float) spanning four holding registers (200-203)
+[[plcs.tags]]
+id = "ns=1;s=ModbusPLC.Energy"
+name = "Energy"
+address = "200"
+data_type = "Double"
+writable = false
+word_count = 4
+
+# ── Second Modbus PLC behind the same bridge (different unit_id) ────────────
+[[plcs]]
+name = "ModbusSlave2"
+protocol = "modbus"
+endpoint = "192.168.200.20:502"
+cycle_ms = 500
+unit_id = 2
+
+[[plcs.tags]]
+id = "ns=1;s=ModbusSlave2.Counter"
+name = "Counter"
+address = "0"
+data_type = "UInt32"
+writable = true
+word_count = 2

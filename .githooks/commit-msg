@@ -1,0 +1,19 @@
+#!/bin/sh
+# Conventional Commits check for the commit-msg hook.
+# Installed via `git config core.hooksPath .githooks` (run setup-hooks.sh).
+
+COMMIT_MSG=$(cat "$1")
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
+
+# type[(scope)][!]: description
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: .+'
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+    echo "ERROR: Commit message does not follow Conventional Commits format." >&2
+    echo "" >&2
+    echo "Expected: type[(scope)][!]: description" >&2
+    echo "Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert" >&2
+    echo "" >&2
+    echo "Your message: $FIRST_LINE" >&2
+    exit 1
+fi

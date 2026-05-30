@@ -1,0 +1,31 @@
+# Root workspace for the opcua-plc-bridge project
+
+[workspace]
+members = [
+    "core-model",
+    "driver/common",
+    "driver/fins",
+    "driver/modbus",
+    "opcua-server",
+    "runtime",
+]
+
+resolver = "2"
+
+[workspace.dependencies]
+core-model = { path = "core-model" }
+driver-common = { path = "driver/common" }
+driver-fins = { path = "driver/fins" }
+driver-modbus = { path = "driver/modbus" }
+opcua-server = { path = "opcua-server" }
+runtime = { path = "runtime" }
+
+[workspace.metadata]
+description = "OPC UA bridge for PLCs with protocol drivers and a unified core model."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+
+[workspace.metadata.ci]
+recommended_rust_version = "1.70"
+rustfmt = true
+clippy = true

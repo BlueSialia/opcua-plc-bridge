@@ -1,0 +1,119 @@
+name: Binary check
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check:
+    name: Size and compile time
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore baseline
+        id: cache-baseline
+        uses: actions/cache/restore@v5
+        with:
+          path: baseline.json
+          key: binary-baseline-${{ github.run_id }}
+          restore-keys: binary-baseline-
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Measure compilation time
+        run: |
+          /usr/bin/time -f '%e' -o compile-time.txt cargo build --release
+          echo "Compilation time (real seconds): $(cat compile-time.txt)"
+
+      - name: Measure binary sizes
+        run: |
+          find target/release -maxdepth 1 -type f -executable \
+            -exec stat --format='%n %s' {} \; \
+            | sort \
+            | jq -R 'split(" ") | {(.[0] | split("/")[-1]): (.[1] | tonumber)}' \
+            | jq -s add > pr-sizes.json
+          echo "PR binary sizes:"
+          cat pr-sizes.json
+
+      - name: Install cargo-bloat
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bloat
+
+      - name: Generate bloat report
+        run: |
+          echo "## cargo bloat (largest crates)" > bloat-report.md
+          echo '```' >> bloat-report.md
+          cargo bloat --release --crates -n 20 >> bloat-report.md
+          echo '```' >> bloat-report.md
+
+      - name: Compare with baseline
+        if: steps.cache-baseline.outputs.cache-hit == 'true'
+        run: |
+          SIZE_THRESHOLD=10
+          TIME_THRESHOLD=20
+
+          for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
+            pr_size=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
+            base_size=$(jq -r ".binaries[\"$bin\"] // 0" baseline.json)
+
+            if [ "$base_size" = "0" ]; then
+              echo "::warning::New binary '$bin' detected (no baseline). Size: $pr_size bytes"
+              continue
+            fi
+
+            diff=$(( pr_size - base_size ))
+            pct=$(echo "scale=2; $diff * 100 / $base_size" | bc)
+
+            if [ "$diff" -gt 0 ]; then
+              if [ "$(echo "$pct > $SIZE_THRESHOLD" | bc)" = "1" ]; then
+                echo "::error::$bin grew by $pct% ($base_size -> $pr_size bytes, +$diff bytes). Threshold is ${SIZE_THRESHOLD}%."
+                SIZE_FAIL=1
+              else
+                echo "::notice::$bin grew by $pct% ($base_size -> $pr_size bytes, +$diff bytes). Within threshold."
+              fi
+            elif [ "$diff" -lt 0 ]; then
+              echo "::notice::$bin shrank by ${pct#-}% ($base_size -> $pr_size bytes)."
+            else
+              echo "::notice::$bin unchanged ($pr_size bytes)."
+            fi
+          done
+
+          pr_time=$(cat compile-time.txt)
+          base_time=$(jq -r '.compile_time_real // 0' baseline.json)
+
+          if [ "$base_time" != "0" ]; then
+            echo "Baseline compile time: ${base_time}s, PR compile time: ${pr_time}s"
+            cmp=$(echo "$pr_time > $base_time" | bc)
+            if [ "$cmp" = "1" ]; then
+              pct=$(echo "scale=2; ($pr_time - $base_time) * 100 / $base_time" | bc)
+              if [ "$(echo "$pct > $TIME_THRESHOLD" | bc)" = "1" ]; then
+                echo "::error::Compilation time grew by ${pct}% (${base_time}s -> ${pr_time}s). Threshold is ${TIME_THRESHOLD}%."
+                TIME_FAIL=1
+              else
+                echo "::notice::Compilation time grew by ${pct}% (${base_time}s -> ${pr_time}s). Within threshold."
+              fi
+            else
+              pct=$(echo "scale=2; ($base_time - $pr_time) * 100 / $base_time" | bc)
+              echo "::notice::Compilation time decreased by ${pct}% (${base_time}s -> ${pr_time}s)."
+            fi
+          else
+            echo "::warning::No baseline compilation time available."
+          fi
+
+          if [ "${SIZE_FAIL:-0}" = "1" ] || [ "${TIME_FAIL:-0}" = "1" ]; then
+            exit 1
+          fi
+
+      - name: Post report as PR comment
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          file-path: bloat-report.md
+          comment-tag: binary-check

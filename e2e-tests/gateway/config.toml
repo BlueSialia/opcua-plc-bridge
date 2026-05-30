@@ -1,0 +1,77 @@
+# E2E test configuration: two Modbus PLCs with holding-register and coil
+# tags, plus an OPC UA server with no security (local test only).
+#
+# Tag `id` fields use the `ns=N;s=<name>` format. The string part
+# (after `s=`) becomes the node's OPC UA string NodeId in the server's
+# namespace. The `ns=N` prefix is informational — the server ignores it
+# and uses its own namespace index (typically 2 for open62541 0.10).
+
+[opcua]
+bind_addr = "0.0.0.0"
+port = 4840
+application_name = "opcua-plc-bridge-e2e"
+application_uri = "urn:opcua-plc-bridge:e2e"
+namespace_uri = "urn:opcua-plc-bridge:e2e"
+anonymous_enabled = true
+username_password_enabled = false
+write_mode = "ConfirmedAck"
+
+# ── PLC 1: pymodbus emulator ─────────────────────────────────────────
+
+[[plcs]]
+name = "test-plc-pymodbus"
+protocol = "modbus"
+endpoint = "modbus-pymodbus:502"
+unit_id = 1
+cycle_ms = 200
+
+[[plcs.tags]]
+id = "ns=2;s=holding_u16"
+name = "HoldingUInt16"
+address = "0"
+data_type = "UInt16"
+writable = true
+
+[[plcs.tags]]
+id = "ns=2;s=holding_u32"
+name = "HoldingUInt32"
+address = "2"
+data_type = "UInt32"
+word_count = 2
+
+[[plcs.tags]]
+id = "ns=2;s=holding_float"
+name = "HoldingFloat"
+address = "4"
+data_type = "Float"
+word_count = 2
+
+# ── PLC 2: stdlib Modbus emulator ────────────────────────────────────
+
+[[plcs]]
+name = "test-plc-stdlib"
+protocol = "modbus"
+endpoint = "modbus-stdlib:502"
+unit_id = 1
+cycle_ms = 200
+
+[[plcs.tags]]
+id = "ns=2;s=stdlib_u16"
+name = "StdlibUInt16"
+address = "0"
+data_type = "UInt16"
+writable = true
+
+[[plcs.tags]]
+id = "ns=2;s=stdlib_u32"
+name = "StdlibUInt32"
+address = "2"
+data_type = "UInt32"
+word_count = 2
+
+[[plcs.tags]]
+id = "ns=2;s=stdlib_float"
+name = "StdlibFloat"
+address = "4"
+data_type = "Float"
+word_count = 2

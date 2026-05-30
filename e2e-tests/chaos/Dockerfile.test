@@ -1,0 +1,14 @@
+FROM node:22-alpine
+
+# iproute2 provides the `tc` command for netem fault injection.
+# We share the chaos container's network namespace so `tc` rules
+# applied here affect the proxy's traffic.
+RUN apk add --no-cache iproute2
+
+# Install node-opcua for the test runner script.
+WORKDIR /app
+COPY opcua-clients/node-opcua/package.json opcua-clients/node-opcua/package-lock.json* ./
+RUN npm install
+
+WORKDIR /scripts
+ENTRYPOINT ["/scripts/run-scenarios.sh"]

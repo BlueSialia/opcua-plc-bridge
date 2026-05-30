@@ -1,0 +1,8 @@
+{
+  "name": "opcua-e2e-client",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "node-opcua": "^2.140.0"
+  }
+}

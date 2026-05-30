@@ -1,0 +1,18 @@
+[workspace]
+members = [
+  "fins",
+  "modbus",
+  "common",
+]
+# Use resolver v2 for more flexible dependency resolution across the workspace
+resolver = "2"
+
+[workspace.metadata]
+description = "Driver workspace containing protocol-specific PLC drivers. Each driver is an independent crate."
+license = "Hippocratic License 3.0"
+repository = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/driver"
+
+[workspace.metadata.ci]
+recommended_rust_version = "1.70"
+rustfmt = true
+clippy = true

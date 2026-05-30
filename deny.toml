@@ -1,0 +1,103 @@
+# cargo-deny configuration for opcua-plc-bridge
+
+[advisories]
+yanked = "deny"
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+unused-allowed-license = "allow"
+confidence-threshold = 0.8
+allow = [
+    "LicenseRef-Hippocratic-3.0",
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-4-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDDL-1.0",
+    "EPL-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "OpenSSL",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = true
+
+# unescaper declares "GPL-3.0/MIT" which is a deprecated SPDX expression.
+# It is actually dual-licensed (GPL-3.0-only OR MIT); we pick MIT.
+[[licenses.clarify]]
+crate = "core-model"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "driver-common"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "driver-fins"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "driver-modbus"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "opcua-server"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "runtime"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = []
+
+[[licenses.clarify]]
+crate = "unescaper"
+expression = "MIT"
+license-files = []
+
+[[licenses.clarify]]
+crate = "open62541"
+expression = "MPL-2.0"
+license-files = []
+
+[bans]
+multiple-versions = "deny"
+# Workspace path deps intentionally omit version fields, so wildcards are allowed.
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow-workspace = true
+
+# Transitive duplicates from dependencies that haven't aligned yet.
+skip = [
+    # hashbrown 0.14 from dashmap, 0.17 from indexmap
+    { crate = "hashbrown@0.14.5", reason = "dashmap 6 still uses hashbrown 0.14" },
+    # wit-bindgen 0.51 from wasip3, 0.57 from wasip2 — both via getrandom/rand
+    { crate = "wit-bindgen@0.51.0", reason = "transitive WASI dep from getrandom/rand" },
+]
+
+skip-tree = [
+    { crate = "windows-sys@0.60.2", reason = "transitive Windows-only dep from socket2/tokio" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
