@@ -706,6 +706,18 @@ impl ModbusDriver {
                                 let slice = raw_bytes[off_bytes..off_bytes + len_bytes].to_vec();
                                 let ordered =
                                     driver_common::apply_byte_order(slice, &mapping.byte_order);
+                                if self
+                                    .registry
+                                    .get_definition(mapping.tag_id.as_ref())
+                                    .is_err()
+                                {
+                                    warn!(tag = %mapping.tag_id, "Tag definition not found in registry; skipping decode");
+                                    let _ = self.registry.set_tag_quality(
+                                        mapping.tag_id.as_ref(),
+                                        TagQuality::ConfigError,
+                                    );
+                                    continue;
+                                }
                                 match self.registry.get_tag(mapping.tag_id.as_ref()) {
                                     Ok(_existing) => {
                                         match ModbusDriver::decode_bytes_to_tagvalue(
