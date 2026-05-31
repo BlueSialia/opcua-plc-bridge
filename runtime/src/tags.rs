@@ -14,6 +14,21 @@ use crate::config::TagConfig;
 use core_model::{TagDataType, TagDefinition, WordOrder};
 use std::sync::Arc;
 
+/// Parse a byte_order string into a `WordOrder`.
+fn parse_byte_order(s: Option<&str>, context: &str) -> Result<WordOrder> {
+    match s {
+        None | Some("ABCD") | Some("abcd") => Ok(WordOrder::ABCD),
+        Some("BADC") | Some("badc") => Ok(WordOrder::BADC),
+        Some("CDAB") | Some("cdab") => Ok(WordOrder::CDAB),
+        Some("DCBA") | Some("dcba") => Ok(WordOrder::DCBA),
+        Some(other) => Err(anyhow!(
+            "Unknown byte_order '{}' for {}; expected one of ABCD, BADC, CDAB, DCBA",
+            other,
+            context
+        )),
+    }
+}
+
 /// Parse textual `data_type` from config into `TagDataType`.
 ///
 /// Centralizing this logic avoids duplication across the various mapping helpers.
@@ -43,21 +58,7 @@ fn parse_data_type(s: &str) -> Result<TagDataType> {
 pub fn tagconfig_to_definition(t: &TagConfig, plc_name: &str) -> Result<TagDefinition> {
     let dt = parse_data_type(&t.data_type)?;
 
-    let byte_order = match t.byte_order.as_deref() {
-        None => WordOrder::ABCD,
-        Some(s) => match s {
-            "ABCD" | "abcd" => WordOrder::ABCD,
-            "BADC" | "badc" => WordOrder::BADC,
-            "CDAB" | "cdab" => WordOrder::CDAB,
-            "DCBA" | "dcba" => WordOrder::DCBA,
-            other => {
-                return Err(anyhow!(
-                    "Unknown byte_order '{}'; expected one of ABCD, BADC, CDAB, DCBA",
-                    other
-                ));
-            }
-        },
-    };
+    let byte_order = parse_byte_order(t.byte_order.as_deref(), "tag definition")?;
 
     let mut def = TagDefinition::new(
         t.id.clone(),
@@ -140,21 +141,7 @@ pub fn tagconfig_to_fins_mapping(t: &TagConfig) -> Result<driver_fins::TagMappin
         _ => {}
     }
 
-    let byte_order = match t.byte_order.as_deref() {
-        None => WordOrder::ABCD,
-        Some(s) => match s {
-            "ABCD" | "abcd" => WordOrder::ABCD,
-            "BADC" | "badc" => WordOrder::BADC,
-            "CDAB" | "cdab" => WordOrder::CDAB,
-            "DCBA" | "dcba" => WordOrder::DCBA,
-            other => {
-                return Err(anyhow!(
-                    "Unknown byte_order '{}' for FINS mapping; expected one of ABCD, BADC, CDAB, DCBA",
-                    other
-                ));
-            }
-        },
-    };
+    let byte_order = parse_byte_order(t.byte_order.as_deref(), "FINS mapping")?;
 
     Ok(driver_fins::TagMapping {
         tag_id: Arc::from(t.id.clone()),
@@ -220,21 +207,7 @@ pub fn tagconfig_to_modbus_mapping(t: &TagConfig) -> Result<driver_modbus::Modbu
         _ => {}
     }
 
-    let byte_order = match t.byte_order.as_deref() {
-        None => WordOrder::ABCD,
-        Some(s) => match s {
-            "ABCD" | "abcd" => WordOrder::ABCD,
-            "BADC" | "badc" => WordOrder::BADC,
-            "CDAB" | "cdab" => WordOrder::CDAB,
-            "DCBA" | "dcba" => WordOrder::DCBA,
-            other => {
-                return Err(anyhow!(
-                    "Unknown byte_order '{}' for Modbus mapping; expected one of ABCD, BADC, CDAB, DCBA",
-                    other
-                ));
-            }
-        },
-    };
+    let byte_order = parse_byte_order(t.byte_order.as_deref(), "Modbus mapping")?;
 
     Ok(driver_modbus::ModbusMapping {
         tag_id: Arc::from(t.id.clone()),
