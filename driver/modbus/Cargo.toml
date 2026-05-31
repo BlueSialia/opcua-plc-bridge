@@ -35,10 +35,6 @@ tracing = "0.1"
 async-trait = "0.1"
 byteorder = "1"
 
-[features]
-default = ["native"]
-native = []
-
 [package.metadata]
 keywords = ["modbus", "plc", "driver", "opcua", "modbus-tcp"]
 categories = ["network-programming", "embedded"]

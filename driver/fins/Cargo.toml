@@ -46,10 +46,6 @@ tracing = "0.1"
 
 
 
-[features]
-default = ["native"]
-native = []
-
 [package.metadata]
 keywords = ["fins", "omron", "plc", "driver", "opcua"]
 categories = ["network-programming", "embedded"]

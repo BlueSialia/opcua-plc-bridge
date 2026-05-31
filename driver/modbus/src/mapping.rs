@@ -143,7 +143,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "native")]
     /// #feature DRV-MODBUS
     #[test]
     fn serde_roundtrip() {
