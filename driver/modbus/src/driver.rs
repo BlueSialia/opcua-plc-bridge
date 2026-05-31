@@ -110,8 +110,17 @@ impl ModbusDriver {
                 ("detail".to_string(), serde_json::Value::Object(detail_map)),
             ]));
 
-            // best-effort, non-blocking send; ignore errors (sender full / closed)
-            let _ = tx.try_send(obj);
+            // Use non-blocking send so health emission doesn't backpressure drivers.
+            if let Err(e) = tx.try_send(obj) {
+                match e {
+                    tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                        warn!(driver = %self.config.name, "Health channel full; event dropped");
+                    }
+                    tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                        debug!(driver = %self.config.name, "Health channel closed; event dropped");
+                    }
+                }
+            }
         }
     }
 

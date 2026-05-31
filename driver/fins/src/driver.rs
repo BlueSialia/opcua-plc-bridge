@@ -16,7 +16,7 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::FinsConfig;
 use crate::errors::DriverError;
@@ -489,7 +489,16 @@ impl FinsDriver {
             map.insert("detail".to_string(), Value::Object(detail_obj));
 
             // Use non-blocking send so health emission doesn't backpressure drivers.
-            let _ = tx.try_send(Value::Object(map));
+            if let Err(e) = tx.try_send(Value::Object(map)) {
+                match e {
+                    tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                        warn!(driver = %self.config.name, "Health channel full; event dropped");
+                    }
+                    tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                        debug!(driver = %self.config.name, "Health channel closed; event dropped");
+                    }
+                }
+            }
         }
     }
 
