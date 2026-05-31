@@ -53,7 +53,10 @@ impl Tag {
     pub fn is_stale(&self, timeout: ChronoDuration) -> bool {
         let now = Utc::now();
         match now.signed_duration_since(self.source_timestamp) {
-            d if d < ChronoDuration::zero() => true,
+            d if d < ChronoDuration::zero() => {
+                tracing::trace!("source_timestamp is in the future (possible clock skew)");
+                true
+            }
             d => d > timeout,
         }
     }
