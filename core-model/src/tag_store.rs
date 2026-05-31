@@ -5,12 +5,12 @@
 //! a snapshot.
 
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
 use arc_swap::ArcSwap;
 use chrono::{DateTime, Utc};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::error::CoreError;
 use crate::tag::Tag;
@@ -29,7 +29,7 @@ struct Inner {
     tags: Vec<Arc<ArcSwap<Tag>>>,
     index: HashMap<Arc<str>, usize>,
     sorted_ids: Vec<Arc<str>>,
-    subscribers: Vec<Sender<TagChange>>,
+    subscribers: Vec<SyncSender<TagChange>>,
 }
 
 impl Inner {
@@ -81,10 +81,18 @@ impl TagStore {
     /// Same as `broadcast_change` but operates on an already-locked `Inner` reference.
     fn broadcast_change_locked(inner: &Inner, tag_id: &str, tag: &Tag) {
         for tx in inner.subscribers.iter() {
-            let _ = tx.send(TagChange {
+            match tx.try_send(TagChange {
                 tag_id: tag_id.to_string(),
                 tag: tag.clone(),
-            });
+            }) {
+                Ok(()) => {}
+                Err(TrySendError::Full(_)) => {
+                    warn!(tag = %tag_id, "Tag change event dropped: subscriber channel full");
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    // Subscriber disconnected; will be pruned on next write-lock
+                }
+            }
         }
     }
 
@@ -161,7 +169,7 @@ impl TagStore {
     /// `TagChange` each time a tag is inserted/updated/modified. Subscribers
     /// are stored in the TagStore and will be notified on subsequent updates.
     pub fn subscribe(&self) -> Receiver<TagChange> {
-        let (tx, rx) = channel();
+        let (tx, rx) = sync_channel(128);
         // Register sender with the store so it will receive future events.
         let mut inner = self.inner.write().unwrap();
         inner.subscribers.push(tx);
