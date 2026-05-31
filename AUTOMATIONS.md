@@ -12,7 +12,7 @@ Git hooks are configured via `core.hooksPath` pointing to `.githooks/`. Run `./s
 
 ## CI (continuous integration)
 
-All CI workflows live in `.github/workflows/`. They use standard Rust tooling — no extra task runners.
+All CI workflows live in `.github/workflows/`.
 
 ### `ci.yml` — Core CI
 
@@ -42,7 +42,7 @@ All CI workflows live in `.github/workflows/`. They use standard Rust tooling �
 
 | Job | Tool | What it checks |
 |---|---|---|
-| Size & compile time | `cargo build --release`, `cargo-bloat` | Compares binary size and wall-clock compilation time against the baseline from `main`. Fails if size grows >10% or compile time grows >20%. Posts a `cargo-bloat` report as a PR comment. |
+| Size & compile time | `cargo build --release`, `cargo-bloat` | Compares binary size and wall-clock compilation time against the baseline from `main`. Fails if size grows >10% or compile time grows >20%. Posts a PR comment with a summary table and a `cargo-bloat` report. |
 
 ### `binary-baseline.yml` — Baseline recording
 
@@ -67,31 +67,17 @@ All CI workflows live in `.github/workflows/`. They use standard Rust tooling �
 
 The PR is created with the commit message `chore: release`. When merged, it triggers the tag workflow.
 
-### `release-tag.yml` — Git tag and GitHub release
+### `release-tag.yml` — Git tag, GitHub release, and binary attachment
 
 **Trigger:** push to `main` with commit message starting with `chore: release`.
 
 | Step | Tool | What it does |
 |---|---|---|
+| Build | `cargo build --release` | Builds the `runtime` binary. |
 | Read version | `cargo metadata` | Reads the version from the `runtime` crate's `Cargo.toml`. |
 | Create tag | `git tag` | Creates an annotated tag (`v{version}`) and pushes it. |
-| Create release | `gh release create` | Creates a GitHub release with the changelog contents. |
-
-### `release-binary.yml` — Binary attachment
-
-**Trigger:** GitHub release published.
-
-| Step | Tool | What it does |
-|---|---|---|
-| Build & upload | `cargo build --release`, `action-gh-release` | Builds the `runtime` binary and attaches it to the GitHub release. |
-
-### Release flow summary
-
-```
-Push to main (feat/fix commits) → release.yml creates release PR
-Merge release PR ("chore: release") → release-tag.yml creates git tag + GitHub release
-Release published → release-binary.yml builds & attaches binary
-```
+| Generate notes | `git cliff --latest` | Generates the changelog entry for just this version. |
+| Create release | `softprops/action-gh-release` | Creates a GitHub release with the version's changelog entry as body and attaches the binary. |
 
 ## Configuration files
 

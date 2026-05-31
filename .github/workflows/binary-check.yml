@@ -27,7 +27,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Measure compilation time
+      - name: Build and measure compile time
         run: |
           /usr/bin/time -f '%e' -o compile-time.txt cargo build --release
           echo "Compilation time (real seconds): $(cat compile-time.txt)"
@@ -47,74 +47,115 @@ jobs:
         with:
           tool: cargo-bloat
 
-      - name: Generate bloat report
+      - name: Analyze and generate report
+        shell: bash
         run: |
-          echo "## cargo bloat (largest crates)" > bloat-report.md
-          echo '```' >> bloat-report.md
-          cargo bloat --release --crates -n 20 >> bloat-report.md
-          echo '```' >> bloat-report.md
+          set -euo pipefail
 
-      - name: Compare with baseline
-        if: steps.cache-baseline.outputs.cache-hit == 'true'
-        run: |
           SIZE_THRESHOLD=10
           TIME_THRESHOLD=20
+          PR_TIME=$(cat compile-time.txt)
+          CACHE_HIT="${{ steps.cache-baseline.outputs.cache-hit }}"
+          SIZE_FAIL=0
+          TIME_FAIL=0
+          REPORT="report.md"
 
-          for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
-            pr_size=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
-            base_size=$(jq -r ".binaries[\"$bin\"] // 0" baseline.json)
+          # Helper: write to both stdout (annotations) and report file
+          report()  { echo "$@" >> "$REPORT"; }
+          annotate(){ echo "$@"; }
+          both()    { echo "$@"; echo "$@" >> "$REPORT"; }
 
-            if [ "$base_size" = "0" ]; then
-              echo "::warning::New binary '$bin' detected (no baseline). Size: $pr_size bytes"
-              continue
-            fi
+          # --- Header ---
+          report "## Binary Check"
+          report ""
 
-            diff=$(( pr_size - base_size ))
-            pct=$(echo "scale=2; $diff * 100 / $base_size" | bc)
+          # --- Compile Time ---
+          both "### Compile Time"
+          report ""
+          if [ "$CACHE_HIT" = "true" ]; then
+            BASE_TIME=$(jq -r '.compile_time_real // 0' baseline.json)
+            if [ "$BASE_TIME" != "0" ]; then
+              DELTA=$(echo "scale=1; ($PR_TIME - $BASE_TIME) * 100 / $BASE_TIME" | bc)
+              report "| Metric | Baseline | PR | Change |"
+              report "|--------|----------|----|--------|"
+              report "| Wall clock | ${BASE_TIME}s | ${PR_TIME}s | ${DELTA}% |"
 
-            if [ "$diff" -gt 0 ]; then
-              if [ "$(echo "$pct > $SIZE_THRESHOLD" | bc)" = "1" ]; then
-                echo "::error::$bin grew by $pct% ($base_size -> $pr_size bytes, +$diff bytes). Threshold is ${SIZE_THRESHOLD}%."
-                SIZE_FAIL=1
-              else
-                echo "::notice::$bin grew by $pct% ($base_size -> $pr_size bytes, +$diff bytes). Within threshold."
-              fi
-            elif [ "$diff" -lt 0 ]; then
-              echo "::notice::$bin shrank by ${pct#-}% ($base_size -> $pr_size bytes)."
-            else
-              echo "::notice::$bin unchanged ($pr_size bytes)."
-            fi
-          done
-
-          pr_time=$(cat compile-time.txt)
-          base_time=$(jq -r '.compile_time_real // 0' baseline.json)
-
-          if [ "$base_time" != "0" ]; then
-            echo "Baseline compile time: ${base_time}s, PR compile time: ${pr_time}s"
-            cmp=$(echo "$pr_time > $base_time" | bc)
-            if [ "$cmp" = "1" ]; then
-              pct=$(echo "scale=2; ($pr_time - $base_time) * 100 / $base_time" | bc)
-              if [ "$(echo "$pct > $TIME_THRESHOLD" | bc)" = "1" ]; then
-                echo "::error::Compilation time grew by ${pct}% (${base_time}s -> ${pr_time}s). Threshold is ${TIME_THRESHOLD}%."
+              if [ "$(echo "$DELTA > $TIME_THRESHOLD" | bc)" = "1" ]; then
+                annotate "::error::Compile time grew by ${DELTA}% (${BASE_TIME}s → ${PR_TIME}s). Threshold is ${TIME_THRESHOLD}%."
                 TIME_FAIL=1
+              elif [ "$(echo "$DELTA > 0" | bc)" = "1" ]; then
+                annotate "::notice::Compile time grew by ${DELTA}% (${BASE_TIME}s → ${PR_TIME}s). Within threshold."
               else
-                echo "::notice::Compilation time grew by ${pct}% (${base_time}s -> ${pr_time}s). Within threshold."
+                annotate "::notice::Compile time decreased by ${DELTA#-}% (${BASE_TIME}s → ${PR_TIME}s)."
               fi
             else
-              pct=$(echo "scale=2; ($base_time - $pr_time) * 100 / $base_time" | bc)
-              echo "::notice::Compilation time decreased by ${pct}% (${base_time}s -> ${pr_time}s)."
+              report "| Metric | PR |"
+              report "|--------|----|"
+              report "| Wall clock | ${PR_TIME}s |"
             fi
           else
-            echo "::warning::No baseline compilation time available."
+            report "| Metric | PR |"
+            report "|--------|----|"
+            report "| Wall clock | ${PR_TIME}s |"
+            annotate "::warning::No baseline available for comparison."
           fi
+          report ""
 
-          if [ "${SIZE_FAIL:-0}" = "1" ] || [ "${TIME_FAIL:-0}" = "1" ]; then
+          # --- Binary Sizes ---
+          both "### Binary Sizes"
+          report ""
+          if [ "$CACHE_HIT" = "true" ]; then
+            report "| Binary | Baseline | PR | Change |"
+            report "|--------|----------|----|--------|"
+            for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
+              PR_SIZE=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
+              BASE_SIZE=$(jq -r ".binaries[\"$bin\"] // 0" baseline.json)
+              PR_HUMAN=$(numfmt --to=iec "$PR_SIZE" 2>/dev/null || echo "${PR_SIZE}B")
+              if [ "$BASE_SIZE" != "0" ]; then
+                BASE_HUMAN=$(numfmt --to=iec "$BASE_SIZE" 2>/dev/null || echo "${BASE_SIZE}B")
+                DIFF=$(( PR_SIZE - BASE_SIZE ))
+                DELTA=$(echo "scale=1; $DIFF * 100 / $BASE_SIZE" | bc)
+                report "| \`$bin\` | $BASE_HUMAN | $PR_HUMAN | ${DELTA}% |"
+
+                if [ "$DIFF" -gt 0 ] && [ "$(echo "$DELTA > $SIZE_THRESHOLD" | bc)" = "1" ]; then
+                  annotate "::error::$bin grew by ${DELTA}% ($BASE_HUMAN → $PR_HUMAN). Threshold is ${SIZE_THRESHOLD}%."
+                  SIZE_FAIL=1
+                elif [ "$DIFF" -gt 0 ]; then
+                  annotate "::notice::$bin grew by ${DELTA}% ($BASE_HUMAN → $PR_HUMAN). Within threshold."
+                elif [ "$DIFF" -lt 0 ]; then
+                  annotate "::notice::$bin shrank by ${DELTA#-}% ($BASE_HUMAN → $PR_HUMAN)."
+                else
+                  annotate "::notice::$bin unchanged ($PR_HUMAN)."
+                fi
+              else
+                report "| \`$bin\` | N/A | $PR_HUMAN | new |"
+                annotate "::warning::New binary '$bin' detected (no baseline). Size: $PR_HUMAN"
+              fi
+            done
+          else
+            report "| Binary | Size |"
+            report "|--------|------|"
+            for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
+              PR_SIZE=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
+              PR_HUMAN=$(numfmt --to=iec "$PR_SIZE" 2>/dev/null || echo "${PR_SIZE}B")
+              report "| \`$bin\` | $PR_HUMAN |"
+            done
+          fi
+          report ""
+
+          # --- Bloat report ---
+          both "### cargo bloat (largest crates)"
+          report '```'
+          cargo bloat --release --crates -n 20 >> "$REPORT"
+          report '```'
+
+          if [ "$SIZE_FAIL" = "1" ] || [ "$TIME_FAIL" = "1" ]; then
             exit 1
           fi
 
       - name: Post report as PR comment
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && (success() || failure())
         uses: thollander/actions-comment-pull-request@v3
         with:
-          file-path: bloat-report.md
+          file-path: report.md
           comment-tag: binary-check

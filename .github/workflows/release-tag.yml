@@ -8,12 +8,27 @@ permissions:
   contents: write
 
 jobs:
-  tag:
-    name: Create tag and release
+  release:
+    name: Create release and attach binary
     if: "startsWith(github.event.head_commit.message, 'chore: release')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Build release binary
+        run: cargo build --release -p runtime
 
       - name: Get version
         id: version
@@ -23,13 +38,24 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Create tag and GitHub release
+      - name: Create tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          gh release create "v$VERSION" \
-            --title "v$VERSION" \
-            --notes-file CHANGELOG.md
+
+      - name: Generate release notes
+        run: |
+          git cliff --latest -o release-notes.md
+          echo "--- Release notes ---"
+          cat release-notes.md
+
+      - name: Create release and upload binary
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          files: target/release/opcua-plc-bridge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
