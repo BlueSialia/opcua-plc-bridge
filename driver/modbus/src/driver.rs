@@ -776,7 +776,12 @@ impl ModbusDriver {
 
                     // advance to next chunk
                     let advance = chunk_qty as u32;
-                    chunk_start = (chunk_start as u32 + advance) as u16;
+                    let next = (chunk_start as u32).wrapping_add(advance);
+                    if next > u16::MAX as u32 {
+                        error!("Modbus chunk_start overflow at address {}", chunk_start);
+                        break;
+                    }
+                    chunk_start = next as u16;
                     remaining = remaining.saturating_sub(advance);
                 } // end while remaining > 0
             } // end for groups
