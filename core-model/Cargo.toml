@@ -1,6 +1,6 @@
 [package]
 name = "core-model"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 publish = false
 description = "Core internal tag model for OPC UA PLC bridge. Provides tag types, quality, timestamps and a thread-safe tag store with minimal locking."
