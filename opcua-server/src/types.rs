@@ -40,19 +40,21 @@ impl ServerHandle {
 
     /// Wait for the server task to finish. Returns any backend error if present.
     ///
-    /// Before awaiting the server task, this joins background threads (write bridge
-    /// and tag event bridge) to detect any panics and ensure clean shutdown.
+    /// Awaits the server tokio task first so it can stop the runner and drop the
+    /// bridge channel sender, which unblocks the write bridge thread. The thread
+    /// is joined afterwards to detect any panics.
     pub async fn wait(self) -> Result<(), ServerError> {
-        if let Some(h) = self.write_bridge_thread {
-            let _ = h.join();
-        }
-        match self.join_handle.await {
+        let result = match self.join_handle.await {
             Ok(res) => res,
             Err(join_err) => Err(ServerError::Other(format!(
                 "Server task panicked or was cancelled: {}",
                 join_err
             ))),
+        };
+        if let Some(h) = self.write_bridge_thread {
+            let _ = h.join();
         }
+        result
     }
 }
 

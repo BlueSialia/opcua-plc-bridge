@@ -444,26 +444,37 @@ pub fn start_native_server(
         }
     };
 
+    let write_bridge_shutdown = Arc::new(AtomicBool::new(false));
+    let write_bridge_shutdown_signal = write_bridge_shutdown.clone();
+
     let write_handler_clone = write_handler.clone();
     let processing_thread = std::thread::Builder::new()
         .name("opcua-write-bridge".into())
-        .spawn(move || {
-            while let Ok(bw) = bridge_rx.recv() {
-                let tag_id = bw.tag_id.clone();
-                let value = bw.value.clone();
-                let reply = bw.reply;
+        .spawn(move || loop {
+            match bridge_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(bw) => {
+                    let tag_id = bw.tag_id.clone();
+                    let value = bw.value.clone();
+                    let reply = bw.reply;
 
-                let req = WriteRequest {
-                    tag_id: tag_id.clone(),
-                    value: value.clone(),
-                };
+                    let req = WriteRequest {
+                        tag_id: tag_id.clone(),
+                        value: value.clone(),
+                    };
 
-                let fut = write_handler_clone.handle_write(req);
-                let res = tokio_handle.block_on(fut);
+                    let fut = write_handler_clone.handle_write(req);
+                    let res = tokio_handle.block_on(fut);
 
-                if let Some(tx) = reply {
-                    let _ = tx.send(res.map_err(|e| format!("{}", e)));
+                    if let Some(tx) = reply {
+                        let _ = tx.send(res.map_err(|e| format!("{}", e)));
+                    }
                 }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    if write_bridge_shutdown_signal.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
         })
         .map_err(|e| ServerError::Other(format!("Failed to spawn write bridge thread: {}", e)))?;
@@ -617,6 +628,7 @@ pub fn start_native_server(
         }
 
         let _ = runner_handle.await;
+        write_bridge_shutdown.store(true, Ordering::Relaxed);
         drop(bridge_tx);
         Ok(())
     });
