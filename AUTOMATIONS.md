@@ -67,7 +67,7 @@ All CI workflows live in `.github/workflows/`.
 
 The PR is created with the commit message `chore: release`. When merged, it triggers the tag workflow.
 
-### `release-tag.yml` — Git tag, GitHub release, and binary attachment
+### `release-tag.yml` — Git tag, GitHub release, binary, and container
 
 **Trigger:** push to `main` with commit message starting with `chore: release`.
 
@@ -78,6 +78,7 @@ The PR is created with the commit message `chore: release`. When merged, it trig
 | Create tag | `git tag` | Creates an annotated tag (`v{version}`) and pushes it. |
 | Generate notes | `git cliff --latest` | Generates the changelog entry for just this version. |
 | Create release | `softprops/action-gh-release` | Creates a GitHub release with the version's changelog entry as body and attaches the binary. |
+| Push container | `docker/build-push-action` | Builds the Docker image from `Dockerfile` and pushes it to `ghcr.io` with `latest` and `v{version}` tags. |
 
 ## Configuration files
 

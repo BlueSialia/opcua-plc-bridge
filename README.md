@@ -154,7 +154,7 @@ cargo test --all --test
 You can run the E2E tests with:
 
 ```
-docker compose -f e2e-tests/docker-compose.yml --profile [node/python] up --abort-on-container-exit
+docker compose -f e2e-tests/docker-compose.yml --profile [node/python] up --abort-on-container-exit --attach opcua-client-[node/python]
 ```
 
 You can only run the E2E tests for the node or python profile, not both because each starts a different OPC UA client that runs tests and they will interfere with each other.
@@ -183,13 +183,49 @@ cargo fmt
 
 ## Deployment
 
+### Binary
+
 Download the latest binary from the [GitHub releases page](https://github.com/BlueSialia/opcua-plc-bridge/releases). Place it on the target machine alongside a TOML or YAML configuration file (see `examples/config.toml` for an annotated template), then run:
 
 ```sh
+chmod +x opcua-plc-bridge
 ./opcua-plc-bridge path/to/config.toml
 ```
 
-The binary is statically linked — no Rust toolchain or system libraries are required on the target. For production deployments behind a reverse proxy or load balancer, ensure the OPC UA TCP port (default 4840) is exposed.
+For production deployments behind a reverse proxy or load balancer, ensure the OPC UA TCP port (default 4840) is exposed.
+
+To update, download the new binary, replace the old one, and restart the process.
+
+### Container
+
+Pull the image from GitHub Container Registry and run it with your config file mounted:
+
+```sh
+docker pull ghcr.io/bluesialia/opcua-plc-bridge:latest
+
+docker run -d \
+  --name opcua-plc-bridge \
+  -v /path/to/config.toml:/config.toml:ro \
+  -p 4840:4840 \
+  ghcr.io/bluesialia/opcua-plc-bridge:latest \
+  /config.toml
+```
+
+To update, pull the new image and recreate the container:
+
+```sh
+docker pull ghcr.io/bluesialia/opcua-plc-bridge:latest
+docker stop opcua-plc-bridge
+docker rm opcua-plc-bridge
+docker run -d \
+  --name opcua-plc-bridge \
+  -v /path/to/config.toml:/config.toml:ro \
+  -p 4840:4840 \
+  ghcr.io/bluesialia/opcua-plc-bridge:latest \
+  /config.toml
+```
+
+Alternatively, pin to a specific version (`v1.2.3`) instead of `latest` for reproducible deployments.
 
 ## Built With
 

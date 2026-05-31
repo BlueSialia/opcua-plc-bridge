@@ -43,12 +43,18 @@ services:
   bridge:
     build:
       context: ..
-      dockerfile: e2e-tests/bridge/Dockerfile
+      dockerfile: Dockerfile
+      target: e2e
     depends_on:
       modbus-pymodbus:
         condition: service_healthy
       modbus-stdlib:
         condition: service_healthy
+    environment:
+      RUST_LOG: info
+    command: ["--config", "/etc/opcua/config.toml"]
+    volumes:
+      - ./bridge/config.toml:/etc/opcua/config.toml:ro
     ports:
       - "4840:4840"
     healthcheck:
