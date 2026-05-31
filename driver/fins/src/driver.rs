@@ -208,11 +208,6 @@ impl FinsDriver {
         Ok((sid, end_code, data))
     }
 
-    fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
-        order.apply_to_bytes(&mut bytes);
-        bytes
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn decode_fixed<T>(
         &self,
@@ -246,7 +241,7 @@ impl FinsDriver {
         mapping: &TagMapping,
         mut data_bytes: Vec<u8>,
     ) -> Result<(), DriverError> {
-        data_bytes = Self::apply_byte_order(data_bytes, &mapping.byte_order);
+        data_bytes = driver_common::apply_byte_order(data_bytes, &mapping.byte_order);
 
         // Ensure the tag definition exists in the registry before decoding.
         if self
@@ -574,9 +569,9 @@ impl FinsDriver {
                             bytes.push((w >> 8) as u8);
                             bytes.push((w & 0xFF) as u8);
                         }
-                        let ordered = Self::apply_byte_order(bytes, &mapping.byte_order);
+                        let ordered = driver_common::apply_byte_order(bytes, &mapping.byte_order);
 
-                        if ordered.len() % 2 != 0 {
+                        if !ordered.len().is_multiple_of(2) {
                             warn!("Ordered write bytes length not even");
                             if let Some(reply) = req.reply {
                                 let _ =

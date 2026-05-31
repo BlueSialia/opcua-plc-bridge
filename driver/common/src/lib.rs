@@ -8,8 +8,14 @@
 #![warn(missing_docs)]
 
 use async_trait::async_trait;
-use core_model::TagValue;
+use core_model::{TagValue, WordOrder};
 use serde_json::Value;
+
+/// Apply the configured `WordOrder` to a byte buffer in-place, then return the buffer.
+pub fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
+    order.apply_to_bytes(&mut bytes);
+    bytes
+}
 
 /// A convenient boxed error type drivers and callers may use when they don't
 /// need a concrete error enum.

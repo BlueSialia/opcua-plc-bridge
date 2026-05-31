@@ -161,14 +161,6 @@ impl ModbusDriver {
         b
     }
 
-    /// Apply configured `WordOrder` to raw bytes (words are 2 bytes each).
-    ///
-    /// Delegates to the `WordOrder` helpers provided by the core-model crate.
-    fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
-        order.apply_to_bytes(&mut bytes);
-        bytes
-    }
-
     /// Decode raw bytes into a TagValue using the declared `TagDataType` for the mapping.
     ///
     /// This removes reliance on the runtime-stored value variant and uses the explicit
@@ -333,7 +325,7 @@ impl ModbusDriver {
                                     tx_bytes.push((w & 0xFF) as u8);
                                 }
                                 let ordered_bytes =
-                                    ModbusDriver::apply_byte_order(tx_bytes, &mapping.byte_order);
+                                    driver_common::apply_byte_order(tx_bytes, &mapping.byte_order);
                                 if !ordered_bytes.len().is_multiple_of(2) {
                                     warn!(
                                         "Ordered write bytes length not even for mapping {}",
@@ -713,7 +705,7 @@ impl ModbusDriver {
                                 }
                                 let slice = raw_bytes[off_bytes..off_bytes + len_bytes].to_vec();
                                 let ordered =
-                                    ModbusDriver::apply_byte_order(slice, &mapping.byte_order);
+                                    driver_common::apply_byte_order(slice, &mapping.byte_order);
                                 match self.registry.get_tag(mapping.tag_id.as_ref()) {
                                     Ok(_existing) => {
                                         match ModbusDriver::decode_bytes_to_tagvalue(
