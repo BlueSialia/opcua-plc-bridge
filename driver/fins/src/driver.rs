@@ -452,8 +452,7 @@ impl FinsDriver {
     }
 
     async fn next_sid(&self) -> u8 {
-        // Atomic increment — fetch_add returns previous value. Using SeqCst for simplicity.
-        self.sid_counter.fetch_add(1, Ordering::SeqCst)
+        self.sid_counter.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Sets the channel used to emit health events.
