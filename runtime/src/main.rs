@@ -45,10 +45,158 @@ mod tags;
 mod write_handler;
 
 use cli::Cli;
-use config::{parse_security_mode, parse_security_policy, parse_write_mode, RuntimeConfig};
+use config::{
+    parse_security_mode, parse_security_policy, parse_write_mode, PlcConfig, RuntimeConfig,
+};
 use tags::tagconfig_to_definition;
 use tags::{tagconfig_to_fins_mapping, tagconfig_to_modbus_mapping};
 use write_handler::RuntimeWriteHandler;
+
+/// Resolve a PLC endpoint string to a `SocketAddr`.
+async fn resolve_endpoint(host_port: &str, plc_name: &str) -> Result<SocketAddr> {
+    lookup_host(host_port)
+        .await
+        .with_context(|| format!("Failed to resolve endpoint {} for {}", host_port, plc_name))?
+        .next()
+        .ok_or_else(|| anyhow!("No addresses found for {}", host_port))
+}
+
+/// Set up a FINS protocol driver for the given PLC config and wire it into the runtime.
+async fn setup_fins_driver(
+    plc: &PlcConfig,
+    registry: &Arc<TagRegistry>,
+    write_handler: &mut RuntimeWriteHandler,
+    health_tx: &mpsc::Sender<JsonValue>,
+    drivers: &mut Vec<Arc<runtime_driver::RuntimeDriver>>,
+) -> Result<()> {
+    let endpoint = resolve_endpoint(&plc.endpoint, &plc.name).await?;
+
+    let mut mappings = Vec::new();
+    for t in &plc.tags {
+        let m = tagconfig_to_fins_mapping(t)
+            .with_context(|| format!("FINS mapping error for {}::{}", plc.name, t.id))?;
+        mappings.push(m);
+    }
+
+    let fins_cfg = FinsConfigInternal {
+        name: plc.name.clone(),
+        endpoint,
+        cycle_ms: plc.cycle_ms,
+        keepalive_secs: 30,
+        max_backoff_secs: 30,
+        mappings,
+        max_words_per_request: plc.max_words_per_request.unwrap_or(960),
+    };
+    let fins_drv = Arc::new(FinsDriver::new(fins_cfg, registry.clone()));
+
+    driver_common::ProtocolDriver::validate(fins_drv.as_ref())
+        .map_err(|e| anyhow!("FINS driver validation failed for {}: {}", plc.name, e))?;
+
+    let sender = fins_drv.write_sender();
+    let _ = fins_drv.set_health_sender(health_tx.clone()).await;
+    for t in &plc.tags {
+        let full_id: Arc<str> = Arc::from(t.id.clone());
+        write_handler.add_route_for_fins(full_id.clone(), sender.clone());
+    }
+
+    let proto: Arc<dyn driver_common::ProtocolDriver> = fins_drv.clone();
+    let mut runtime_drv = runtime_driver::RuntimeDriver::new(
+        proto,
+        plc.name.clone(),
+        Duration::from_millis(plc.cycle_ms),
+        registry.clone(),
+    );
+    runtime_drv.set_health_sender(health_tx.clone());
+    let runtime_drv = Arc::new(runtime_drv);
+    runtime_drv.start().await;
+    drivers.push(runtime_drv);
+
+    Ok(())
+}
+
+/// Set up a Modbus protocol driver for the given PLC config and wire it into the runtime.
+async fn setup_modbus_driver(
+    plc: &PlcConfig,
+    registry: &Arc<TagRegistry>,
+    write_handler: &mut RuntimeWriteHandler,
+    health_tx: &mpsc::Sender<JsonValue>,
+    drivers: &mut Vec<Arc<runtime_driver::RuntimeDriver>>,
+) -> Result<()> {
+    let endpoint = resolve_endpoint(&plc.endpoint, &plc.name).await?;
+
+    let mut mappings = Vec::new();
+    for t in &plc.tags {
+        let m = tagconfig_to_modbus_mapping(t)
+            .with_context(|| format!("Modbus mapping error for {}::{}", plc.name, t.id))?;
+        mappings.push(m);
+    }
+
+    let modbus_cfg = ModbusConfigInternal {
+        name: plc.name.clone(),
+        endpoint,
+        unit_id: plc.unit_id.unwrap_or(1),
+        cycle_ms: plc.cycle_ms,
+        mappings,
+        keepalive_secs: 30,
+        max_backoff_secs: 30,
+        io_timeout_ms: 2000,
+    };
+    let modbus_drv = Arc::new(ModbusDriver::new(modbus_cfg, registry.clone()));
+
+    driver_common::ProtocolDriver::validate(modbus_drv.as_ref())
+        .map_err(|e| anyhow!("Modbus driver validation failed for {}: {}", plc.name, e))?;
+
+    let sender = modbus_drv.write_sender();
+    let _ = modbus_drv.set_health_sender(health_tx.clone()).await;
+    for t in &plc.tags {
+        let full_id: Arc<str> = Arc::from(t.id.clone());
+        write_handler.add_route_for_modbus(full_id.clone(), sender.clone());
+    }
+
+    let proto: Arc<dyn driver_common::ProtocolDriver> = modbus_drv.clone();
+    let mut runtime_drv = runtime_driver::RuntimeDriver::new(
+        proto,
+        plc.name.clone(),
+        Duration::from_millis(plc.cycle_ms),
+        registry.clone(),
+    );
+    runtime_drv.set_health_sender(health_tx.clone());
+    let runtime_drv = Arc::new(runtime_drv);
+    runtime_drv.start().await;
+    drivers.push(runtime_drv);
+
+    Ok(())
+}
+
+/// Build the internal `OpcUaConfig` from runtime config, with strict validation.
+fn build_opcua_config(
+    opcua_cfg: &config::OpcUaConfig,
+    write_mode: opcua_server::WriteMode,
+    security_mode: SecurityMode,
+    security_policy: SecurityPolicy,
+) -> OpcUaConfig {
+    OpcUaConfig {
+        bind_addr: opcua_cfg.bind_addr.clone(),
+        port: opcua_cfg.port,
+        application_name: opcua_cfg.application_name.clone(),
+        application_uri: opcua_cfg.application_uri.clone(),
+        namespace_uri: opcua_cfg.namespace_uri.clone(),
+        anonymous_enabled: opcua_cfg.anonymous_enabled,
+        username_password_enabled: opcua_cfg.username_password_enabled,
+        max_sessions: opcua_cfg.max_sessions,
+        max_subscriptions: opcua_cfg.max_subscriptions,
+        write_mode,
+        security_mode,
+        security_policy,
+        certificates: CertificateConfig {
+            server_certificate_path: opcua_cfg.server_certificate_path.clone(),
+            server_private_key_path: opcua_cfg.server_private_key_path.clone(),
+            trust_store_dir: opcua_cfg.trust_store_dir.clone(),
+            reject_store_dir: None,
+            min_key_length: 2048,
+        },
+    }
+}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -121,114 +269,24 @@ async fn main() -> Result<()> {
     for plc in cfg.plcs {
         match plc.protocol.to_lowercase().as_str() {
             "fins" => {
-                let endpoint: SocketAddr = lookup_host(&plc.endpoint)
-                    .await
-                    .map_err(|e| {
-                        anyhow!(
-                            "Failed to resolve endpoint {} for {}: {}",
-                            plc.endpoint,
-                            plc.name,
-                            e
-                        )
-                    })?
-                    .next()
-                    .ok_or_else(|| anyhow!("No addresses found for {}", plc.endpoint))?;
-                let mut mappings = Vec::new();
-                for t in &plc.tags {
-                    let m = tagconfig_to_fins_mapping(t).with_context(|| {
-                        format!("FINS mapping error for {}::{}", plc.name, t.id)
-                    })?;
-                    mappings.push(m);
-                }
-                let fins_cfg = FinsConfigInternal {
-                    name: plc.name.clone(),
-                    endpoint,
-                    cycle_ms: plc.cycle_ms,
-                    keepalive_secs: 30,
-                    max_backoff_secs: 30,
-                    mappings,
-                    max_words_per_request: plc.max_words_per_request.unwrap_or(960),
-                };
-                let fins_drv = Arc::new(FinsDriver::new(fins_cfg, registry.clone()));
-
-                // Perform pre-flight validation
-                driver_common::ProtocolDriver::validate(fins_drv.as_ref()).map_err(|e| {
-                    anyhow!("FINS driver validation failed for {}: {}", plc.name, e)
-                })?;
-
-                let sender = fins_drv.write_sender();
-                let _ = fins_drv.set_health_sender(health_tx.clone()).await;
-                for t in &plc.tags {
-                    let full_id: Arc<str> = Arc::from(t.id.clone());
-                    write_handler.add_route_for_fins(full_id.clone(), sender.clone());
-                }
-                let proto: Arc<dyn driver_common::ProtocolDriver> = fins_drv.clone();
-                let mut runtime_drv = runtime_driver::RuntimeDriver::new(
-                    proto,
-                    plc.name.clone(),
-                    Duration::from_millis(plc.cycle_ms),
-                    registry.clone(),
-                );
-                runtime_drv.set_health_sender(health_tx.clone());
-                let runtime_drv = Arc::new(runtime_drv);
-                runtime_drv.start().await;
-                drivers.push(runtime_drv.clone());
+                setup_fins_driver(
+                    &plc,
+                    &registry,
+                    &mut write_handler,
+                    &health_tx,
+                    &mut drivers,
+                )
+                .await?;
             }
             "modbus" => {
-                let endpoint: SocketAddr = lookup_host(&plc.endpoint)
-                    .await
-                    .map_err(|e| {
-                        anyhow!(
-                            "Failed to resolve endpoint {} for {}: {}",
-                            plc.endpoint,
-                            plc.name,
-                            e
-                        )
-                    })?
-                    .next()
-                    .ok_or_else(|| anyhow!("No addresses found for {}", plc.endpoint))?;
-                let mut mappings = Vec::new();
-                for t in &plc.tags {
-                    let m = tagconfig_to_modbus_mapping(t).with_context(|| {
-                        format!("Modbus mapping error for {}::{}", plc.name, t.id)
-                    })?;
-                    mappings.push(m);
-                }
-
-                let modbus_cfg = ModbusConfigInternal {
-                    name: plc.name.clone(),
-                    endpoint,
-                    unit_id: plc.unit_id.unwrap_or(1),
-                    cycle_ms: plc.cycle_ms,
-                    mappings,
-                    keepalive_secs: 30,
-                    max_backoff_secs: 30,
-                    io_timeout_ms: 2000,
-                };
-                let modbus_drv = Arc::new(ModbusDriver::new(modbus_cfg, registry.clone()));
-
-                // Perform pre-flight validation
-                driver_common::ProtocolDriver::validate(modbus_drv.as_ref()).map_err(|e| {
-                    anyhow!("Modbus driver validation failed for {}: {}", plc.name, e)
-                })?;
-
-                let sender = modbus_drv.write_sender();
-                let _ = modbus_drv.set_health_sender(health_tx.clone()).await;
-                for t in &plc.tags {
-                    let full_id: Arc<str> = Arc::from(t.id.clone());
-                    write_handler.add_route_for_modbus(full_id.clone(), sender.clone());
-                }
-                let proto: Arc<dyn driver_common::ProtocolDriver> = modbus_drv.clone();
-                let mut runtime_drv = runtime_driver::RuntimeDriver::new(
-                    proto,
-                    plc.name.clone(),
-                    Duration::from_millis(plc.cycle_ms),
-                    registry.clone(),
-                );
-                runtime_drv.set_health_sender(health_tx.clone());
-                let runtime_drv = Arc::new(runtime_drv);
-                runtime_drv.start().await;
-                drivers.push(runtime_drv.clone());
+                setup_modbus_driver(
+                    &plc,
+                    &registry,
+                    &mut write_handler,
+                    &health_tx,
+                    &mut drivers,
+                )
+                .await?;
             }
             other => {
                 warn!(
@@ -241,17 +299,12 @@ async fn main() -> Result<()> {
 
     let opcua_cfg = cfg.opcua;
 
-    // Parse with strict validation — unknown values fail startup instead of
-    // silently falling back to potentially insecure defaults.
     let write_mode = parse_write_mode(&opcua_cfg.write_mode).map_err(|e| anyhow!("{}", e))?;
     let security_mode =
         parse_security_mode(opcua_cfg.security_mode.as_deref()).map_err(|e| anyhow!("{}", e))?;
     let security_policy = parse_security_policy(opcua_cfg.security_policy.as_deref())
         .map_err(|e| anyhow!("{}", e))?;
 
-    // Emit a loud startup warning when the deployed configuration has no
-    // security — this is acceptable for local development but should be an
-    // explicit choice for production.
     if security_mode == SecurityMode::None && security_policy == SecurityPolicy::None {
         warn!(
             "OPC UA server starting with NO SECURITY (anonymous={}). \
@@ -271,27 +324,8 @@ async fn main() -> Result<()> {
         ));
     }
 
-    let opcua_cfg_internal = OpcUaConfig {
-        bind_addr: opcua_cfg.bind_addr.clone(),
-        port: opcua_cfg.port,
-        application_name: opcua_cfg.application_name.clone(),
-        application_uri: opcua_cfg.application_uri.clone(),
-        namespace_uri: opcua_cfg.namespace_uri.clone(),
-        anonymous_enabled: opcua_cfg.anonymous_enabled,
-        username_password_enabled: opcua_cfg.username_password_enabled,
-        max_sessions: opcua_cfg.max_sessions,
-        max_subscriptions: opcua_cfg.max_subscriptions,
-        write_mode,
-        security_mode,
-        security_policy,
-        certificates: CertificateConfig {
-            server_certificate_path: opcua_cfg.server_certificate_path.clone(),
-            server_private_key_path: opcua_cfg.server_private_key_path.clone(),
-            trust_store_dir: opcua_cfg.trust_store_dir.clone(),
-            reject_store_dir: None,
-            min_key_length: 2048,
-        },
-    };
+    let opcua_cfg_internal =
+        build_opcua_config(&opcua_cfg, write_mode, security_mode, security_policy);
 
     opcua_cfg_internal
         .validate()
