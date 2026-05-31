@@ -1,3 +1,5 @@
+//! Runtime tag state: value, quality, and timestamps.
+
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use std::sync::Arc;
 
@@ -6,9 +8,13 @@ use crate::tag_value::{TagQuality, TagValue};
 /// Runtime state for a tag.
 #[derive(Debug, Clone)]
 pub struct Tag {
+    /// Current value of the tag (atomically reference-counted for lock-free reads).
     pub value: Arc<TagValue>,
+    /// Quality of the tag value (Good, Stale, CommLost, etc.).
     pub quality: TagQuality,
+    /// Timestamp of when the value was sourced from the PLC.
     pub source_timestamp: DateTime<Utc>,
+    /// Timestamp of when the value was last updated in the server.
     pub server_timestamp: DateTime<Utc>,
 }
 

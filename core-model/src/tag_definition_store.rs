@@ -1,3 +1,5 @@
+//! Read-only store for validated tag definitions.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

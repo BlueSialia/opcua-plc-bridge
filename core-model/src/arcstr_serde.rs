@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serializer};
 use std::borrow::Cow;
 use std::sync::Arc;
 
+/// Serialize an `Arc<str>` as a string.
 pub fn serialize<S>(v: &Arc<str>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -16,6 +17,7 @@ where
     s.serialize_str(v.as_ref())
 }
 
+/// Deserialize a string into an `Arc<str>`.
 pub fn deserialize<'de, D>(d: D) -> Result<Arc<str>, D::Error>
 where
     D: Deserializer<'de>,
@@ -30,6 +32,7 @@ where
 pub mod option {
     use super::*;
 
+    /// Serialize an `Option<Arc<str>>`.
     pub fn serialize<S>(v: &Option<Arc<str>>, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -40,6 +43,7 @@ pub mod option {
         }
     }
 
+    /// Deserialize an optional string into an `Option<Arc<str>>`.
     pub fn deserialize<'de, D>(d: D) -> Result<Option<Arc<str>>, D::Error>
     where
         D: Deserializer<'de>,

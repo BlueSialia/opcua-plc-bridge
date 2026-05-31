@@ -1,3 +1,5 @@
+//! Runtime tag value types, data type descriptors, byte ordering, and quality states.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -5,17 +7,29 @@ use std::fmt;
 /// Runtime value of a tag.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TagValue {
+    /// Boolean value.
     Bool(bool),
+    /// Signed 16-bit integer.
     Int16(i16),
+    /// Unsigned 16-bit integer.
     UInt16(u16),
+    /// Signed 32-bit integer.
     Int32(i32),
+    /// Unsigned 32-bit integer.
     UInt32(u32),
+    /// Signed 64-bit integer.
     Int64(i64),
+    /// Unsigned 64-bit integer.
     UInt64(u64),
+    /// 32-bit floating point.
     Float(f32),
+    /// 64-bit floating point.
     Double(f64),
+    /// UTF-8 string.
     String(String),
+    /// UTC date and time.
     DateTime(DateTime<Utc>),
+    /// Raw byte sequence.
     ByteString(Vec<u8>),
 }
 
@@ -66,27 +80,43 @@ impl TagValue {
 /// Configuration-oriented type descriptor used in `TagDefinition`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TagDataType {
+    /// Boolean type.
     Bool,
+    /// Signed 16-bit integer.
     Int16,
+    /// Unsigned 16-bit integer.
     UInt16,
+    /// Signed 32-bit integer.
     Int32,
+    /// Unsigned 32-bit integer.
     UInt32,
+    /// Signed 64-bit integer.
     Int64,
+    /// Unsigned 64-bit integer.
     UInt64,
+    /// 32-bit floating point.
     Float,
+    /// 64-bit floating point.
     Double,
+    /// UTF-8 string.
     String,
+    /// UTC date and time.
     DateTime,
+    /// Raw byte sequence.
     ByteString,
 }
 
 /// Byte/word ordering used when combining multiple 16-bit registers.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum WordOrder {
+    /// Big-endian: no reordering (default).
     #[default]
     ABCD,
+    /// Byte-swap within each 16-bit word.
     BADC,
+    /// Swap 16-bit word pairs within 32-bit chunks.
     CDAB,
+    /// Reverse bytes within 32-bit chunks (little-endian).
     DCBA,
 }
 

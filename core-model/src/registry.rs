@@ -1,3 +1,5 @@
+//! Tag registry: combines definitions with runtime tags for unified access.
+
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};

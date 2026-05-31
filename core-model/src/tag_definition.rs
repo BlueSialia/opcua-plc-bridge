@@ -1,3 +1,5 @@
+//! Tag definition: static configuration-time metadata for a tag.
+
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

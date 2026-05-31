@@ -7,7 +7,7 @@
 //! to perform writes and confirmations.
 
 #![deny(unsafe_code)]
-#![allow(missing_docs)]
+#![warn(missing_docs)]
 
 use open62541::ua;
 use std::sync::Arc;

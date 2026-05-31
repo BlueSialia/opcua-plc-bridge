@@ -54,6 +54,7 @@ pub struct FinsDriver {
 }
 
 impl FinsDriver {
+    /// Creates a new FinsDriver, precomputing read groups from the config mappings.
     pub fn new(config: FinsConfig, registry: Arc<TagRegistry>) -> Self {
         let (tx, rx) = mpsc::channel(256);
 
@@ -125,6 +126,7 @@ impl FinsDriver {
         }
     }
 
+    /// Returns a cloned sender for enqueuing write requests.
     pub fn write_sender(&self) -> mpsc::Sender<WriteRequest> {
         self.write_tx.clone()
     }
@@ -454,6 +456,7 @@ impl FinsDriver {
         self.sid_counter.fetch_add(1, Ordering::SeqCst)
     }
 
+    /// Sets the channel used to emit health events.
     pub async fn set_health_sender(&self, tx: mpsc::Sender<Value>) {
         let mut guard = self.health_tx.lock().await;
         *guard = Some(tx);

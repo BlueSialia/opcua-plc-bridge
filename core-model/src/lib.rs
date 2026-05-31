@@ -1,5 +1,7 @@
 //! Core model: protocol-agnostic tag definitions, runtime tags, stores and errors.
 
+#![warn(missing_docs)]
+
 pub mod arcstr_serde;
 pub mod error;
 pub mod registry;

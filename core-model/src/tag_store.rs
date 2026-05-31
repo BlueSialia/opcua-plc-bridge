@@ -1,3 +1,9 @@
+//! Thread-safe runtime tag store using per-tag `ArcSwap` for lock-free reads.
+//!
+//! Structural metadata is protected by a single `RwLock`. Per-tag reads are
+//! lock-free: callers clone an `Arc<ArcSwap<Tag>>` and call `load_full()` to get
+//! a snapshot.
+
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -59,6 +65,7 @@ pub struct TagStore {
 }
 
 impl TagStore {
+    /// Create a new, empty TagStore.
     pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(Inner::new())),
@@ -255,11 +262,13 @@ impl TagStore {
         Ok(res)
     }
 
+    /// Return the number of tags in the store.
     pub fn len(&self) -> usize {
         let inner = self.inner.read().unwrap();
         inner.tags.len()
     }
 
+    /// Return true if the store contains no tags.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

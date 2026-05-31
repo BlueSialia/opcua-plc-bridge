@@ -1,6 +1,8 @@
 //! Modbus driver crate for Modbus/TCP.
 //! Public types are re-exported for convenience.
 
+#![warn(missing_docs)]
+
 pub mod config;
 pub mod driver;
 pub mod errors;
