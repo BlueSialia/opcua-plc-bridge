@@ -270,7 +270,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "core-model"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "driver-common"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "core-model",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "driver-fins"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "driver-modbus"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -744,7 +744,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opcua-server"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "core-model",
@@ -927,7 +927,7 @@ checksum = "a96887878f22d7bad8a3b6dc5b7440e0ada9a245242924394987b21cf2210a4c"
 
 [[package]]
 name = "runtime"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "async-trait",
