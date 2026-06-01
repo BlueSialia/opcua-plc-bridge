@@ -73,6 +73,14 @@ pub struct OpcUaConfig {
     /// Directory containing trusted client certificates.
     #[serde(default)]
     pub trust_store_dir: Option<String>,
+
+    /// Directory for rejected certificates (used for auditing).
+    #[serde(default)]
+    pub reject_store_dir: Option<String>,
+
+    /// Minimum key length required for client certificates (default 2048).
+    #[serde(default)]
+    pub min_key_length: Option<u32>,
 }
 
 fn default_true() -> bool {
@@ -110,6 +118,18 @@ pub struct PlcConfig {
 
     #[serde(default)]
     pub max_words_per_request: Option<u32>,
+
+    /// TCP keepalive in seconds (default 30, driver-level).
+    #[serde(default)]
+    pub keepalive_secs: Option<u64>,
+
+    /// Maximum reconnect backoff in seconds (default 30).
+    #[serde(default)]
+    pub max_backoff_secs: Option<u64>,
+
+    /// IO timeout in milliseconds for Modbus operations (default 2000). Ignored for FINS.
+    #[serde(default)]
+    pub io_timeout_ms: Option<u64>,
 }
 
 fn default_cycle_ms() -> u64 {

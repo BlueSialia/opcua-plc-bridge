@@ -34,17 +34,23 @@ write_mode = "ConfirmedAck"
 # server_certificate_path = "/path/to/server_cert.der"
 # server_private_key_path = "/path/to/server_key.der"
 # trust_store_dir = "/path/to/trust_store/"
+# reject_store_dir = "/path/to/rejected/"
+# min_key_length = 2048
 
 # ── PLC definitions ──────────────────────────────────────────────────────────
 # Each [[plcs]] block defines a PLC and its tags.
 # Supported protocols: "fins", "modbus"
 #
 # Fields per PLC:
-#   name         - logical name for this PLC (used in OPC UA browse tree)
-#   protocol     - "fins" or "modbus"
-#   endpoint     - TCP socket address (host:port)
-#   cycle_ms     - poll interval in milliseconds (min 10)
-#   unit_id      - Modbus slave/unit id (1-255); Ignored for FINS.
+#   name                  - logical name for this PLC (used in OPC UA browse tree)
+#   protocol              - "fins" or "modbus"
+#   endpoint              - TCP socket address (host:port)
+#   cycle_ms              - poll interval in milliseconds (min 10)
+#   unit_id               - Modbus slave/unit id (1-255); Ignored for FINS.
+#   keepalive_secs        - TCP keepalive interval in seconds (default 30)
+#   max_backoff_secs      - max reconnect backoff in seconds (default 30)
+#   io_timeout_ms         - IO timeout for Modbus operations in ms (default 2000);
+#                          ignored for FINS
 #   max_words_per_request - (FINS only) max words per read/write command (default 960)
 #
 # Fields per tag:

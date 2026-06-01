@@ -82,8 +82,8 @@ async fn setup_fins_driver(
         name: plc.name.clone(),
         endpoint,
         cycle_ms: plc.cycle_ms,
-        keepalive_secs: 30,
-        max_backoff_secs: 30,
+        keepalive_secs: plc.keepalive_secs.unwrap_or(30),
+        max_backoff_secs: plc.max_backoff_secs.unwrap_or(30),
         mappings,
         max_words_per_request: plc.max_words_per_request.unwrap_or(960),
     };
@@ -137,9 +137,9 @@ async fn setup_modbus_driver(
         unit_id: plc.unit_id.unwrap_or(1),
         cycle_ms: plc.cycle_ms,
         mappings,
-        keepalive_secs: 30,
-        max_backoff_secs: 30,
-        io_timeout_ms: 2000,
+        keepalive_secs: plc.keepalive_secs.unwrap_or(30),
+        max_backoff_secs: plc.max_backoff_secs.unwrap_or(30),
+        io_timeout_ms: plc.io_timeout_ms.unwrap_or(2000),
     };
     let modbus_drv = Arc::new(ModbusDriver::new(modbus_cfg, registry.clone()));
 
@@ -192,8 +192,8 @@ fn build_opcua_config(
             server_certificate_path: opcua_cfg.server_certificate_path.clone(),
             server_private_key_path: opcua_cfg.server_private_key_path.clone(),
             trust_store_dir: opcua_cfg.trust_store_dir.clone(),
-            reject_store_dir: None,
-            min_key_length: 2048,
+            reject_store_dir: opcua_cfg.reject_store_dir.clone(),
+            min_key_length: opcua_cfg.min_key_length.unwrap_or(2048),
         },
     }
 }
