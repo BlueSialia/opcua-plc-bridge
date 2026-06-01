@@ -27,13 +27,21 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-bloat
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bloat
+
       - name: Build and measure compile time
+        shell: bash
         run: |
-          /usr/bin/time -f '%e' -o compile-time.txt cargo build --release
+          set -euo pipefail
+
+          echo "--- Single compilation via cargo-bloat ---"
+          /usr/bin/time -f '%e' -o compile-time.txt cargo bloat --release --crates -n 20 > bloat-output.txt
           echo "Compilation time (real seconds): $(cat compile-time.txt)"
 
-      - name: Measure binary sizes
-        run: |
+          # Measure binary sizes from the artifacts cargo-bloat just built
           find target/release -maxdepth 1 -type f -executable \
             -exec stat --format='%n %s' {} \; \
             | sort \
@@ -41,11 +49,6 @@ jobs:
             | jq -s add > pr-sizes.json
           echo "PR binary sizes:"
           cat pr-sizes.json
-
-      - name: Install cargo-bloat
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-bloat
 
       - name: Analyze and generate report
         shell: bash
@@ -60,7 +63,6 @@ jobs:
           TIME_FAIL=0
           REPORT="report.md"
 
-          # Helper: write to both stdout (annotations) and report file
           report()  { echo "$@" >> "$REPORT"; }
           annotate(){ echo "$@"; }
           both()    { echo "$@"; echo "$@" >> "$REPORT"; }
@@ -146,7 +148,7 @@ jobs:
           # --- Bloat report ---
           both "### cargo bloat (largest crates)"
           report '```'
-          cargo bloat --release --crates -n 20 >> "$REPORT"
+          cat bloat-output.txt >> "$REPORT"
           report '```'
 
           if [ "$SIZE_FAIL" = "1" ] || [ "$TIME_FAIL" = "1" ]; then
