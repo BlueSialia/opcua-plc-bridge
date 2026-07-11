@@ -117,7 +117,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 You only need Rust and Cargo. Both can be installed using `rustup`. Install it from your favourite repository or with:
 
-```
+```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
@@ -125,7 +125,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 Clone this repository locally and compile it.
 
-```
+```sh
 git clone git@github.com:BlueSialia/opcua-plc-bridge.git
 cd opcua-plc-bridge
 cargo build
@@ -137,7 +137,7 @@ cargo build
 
 You can run the unit tests with:
 
-```
+```sh
 cargo test --all --lib
 ```
 
@@ -145,7 +145,7 @@ cargo test --all --lib
 
 You can run the integration tests with:
 
-```
+```sh
 cargo test --all --test
 ```
 
@@ -153,7 +153,7 @@ cargo test --all --test
 
 You can run the E2E tests with:
 
-```
+```sh
 docker compose -f e2e-tests/docker-compose.yml --profile [node/python] up --abort-on-container-exit --attach opcua-client-[node/python]
 ```
 
@@ -163,13 +163,13 @@ You can only run the E2E tests for the node or python profile, not both because 
 
 On top of it you should also periodically run the linter with:
 
-```
+```sh
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 And verify that the documentation builds without warnings:
 
-```
+```sh
 RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 ```
 
@@ -177,7 +177,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
 In order to maintain a similar style over the codebase we use:
 
-```
+```sh
 cargo fmt
 ```
 
