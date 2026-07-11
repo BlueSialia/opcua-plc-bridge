@@ -88,12 +88,8 @@ allow-workspace = true
 skip = [
     # hashbrown 0.14 from dashmap, 0.17 from indexmap
     { crate = "hashbrown@0.14.5", reason = "dashmap 6 still uses hashbrown 0.14" },
-    # wit-bindgen 0.51 from wasip3, 0.57 from wasip2 — both via getrandom/rand
-    { crate = "wit-bindgen@0.51.0", reason = "transitive WASI dep from getrandom/rand" },
-]
-
-skip-tree = [
-    { crate = "windows-sys@0.60.2", reason = "transitive Windows-only dep from socket2/tokio" },
+    # shlex 1.x from bindgen (build dep), 2.x from cc (build dep) — both via open62541-sys
+    { crate = "shlex@1.3.0", reason = "bindgen build dep; cc already uses shlex 2.x" },
 ]
 
 [sources]
