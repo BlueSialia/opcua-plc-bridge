@@ -1,4 +1,27 @@
-target/
+# Version-control and development metadata
 .git/
 .github/
 .githooks/
+.envrc
+.gitignore
+
+# Nix and Mise development files
+.direnv/
+flake.nix
+flake.lock
+mise.toml
+mise.local.toml
+result
+result-*/
+
+# Rust build and test artifacts
+target/
+**/*.rs.bk
+**/mutants.out*/
+
+# Documentation not required to build the image
+ADR.md
+AUTOMATIONS.md
+CHANGELOG.md
+LICENSE.md
+README.md
