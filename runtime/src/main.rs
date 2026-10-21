@@ -18,13 +18,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use tokio::net::lookup_host;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 use core_model::{TagDefinition, TagRegistry};
 
@@ -46,7 +46,7 @@ mod write_handler;
 
 use cli::Cli;
 use config::{
-    parse_security_mode, parse_security_policy, parse_write_mode, PlcConfig, RuntimeConfig,
+    PlcConfig, RuntimeConfig, parse_security_mode, parse_security_policy, parse_write_mode,
 };
 use tags::tagconfig_to_definition;
 use tags::{tagconfig_to_fins_mapping, tagconfig_to_modbus_mapping};
@@ -248,16 +248,16 @@ async fn main() -> Result<()> {
         let known_plcs = known_plcs.clone();
         tokio::spawn(async move {
             while let Some(evt) = health_rx.recv().await {
-                if let Some(plc) = evt.get("plc").and_then(|v| v.as_str()) {
-                    if known_plcs.contains(plc) {
-                        hm_dash.insert(plc.to_string(), evt);
-                    }
+                if let Some(plc) = evt.get("plc").and_then(|v| v.as_str())
+                    && known_plcs.contains(plc)
+                {
+                    hm_dash.insert(plc.to_string(), evt);
                 }
                 while let Ok(evt) = health_rx.try_recv() {
-                    if let Some(plc) = evt.get("plc").and_then(|v| v.as_str()) {
-                        if known_plcs.contains(plc) {
-                            hm_dash.insert(plc.to_string(), evt);
-                        }
+                    if let Some(plc) = evt.get("plc").and_then(|v| v.as_str())
+                        && known_plcs.contains(plc)
+                    {
+                        hm_dash.insert(plc.to_string(), evt);
                     }
                 }
             }

@@ -8,7 +8,7 @@
 //! Each function returns an `anyhow::Result` so callers can propagate
 //! configuration problems with clear error messages.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 
 use crate::config::TagConfig;
 use core_model::{TagDataType, TagDefinition, WordOrder};

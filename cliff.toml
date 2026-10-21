@@ -1,10 +1,10 @@
-# git-cliff configuration for opcua-plc-bridge
+# git-cliff configuration
 # See: https://git-cliff.org/docs/configuration
 
 [changelog]
 header = "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n"
 body = """
-## [{{ version }}]{% if timestamp %} - {{ timestamp | date(format="%Y-%m-%d") }}{% endif %}
+## [{{ version | trim_start_matches(pat="v") }}]{% if timestamp %} - {{ timestamp | date(format="%Y-%m-%d") }}{% endif %}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
@@ -14,9 +14,12 @@ body = """
 """
 trim = true
 
+[bump]
+no_increment_regex = "^(chore|docs|ci|test|style|build)"
+
 [git]
 conventional_commits = true
-filter_unconventional = false
+filter_unconventional = true
 split_commits = false
 commit_parsers = [
     { message = "^feat", group = "Added" },

@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::time;
 use tracing::{debug, error, info, warn};
 
@@ -905,7 +905,6 @@ impl FinsDriver {
     }
 }
 
-#[async_trait::async_trait]
 impl driver_common::ProtocolDriver for FinsDriver {
     fn validate(&self) -> Result<(), driver_common::DynDriverError> {
         for m in &self.config.mappings {
@@ -971,7 +970,9 @@ impl driver_common::ProtocolDriver for FinsDriver {
                         cur_end,
                         next.tag_id,
                         next.address,
-                        next.address.saturating_add(next.word_count as u32).saturating_sub(1)
+                        next.address
+                            .saturating_add(next.word_count as u32)
+                            .saturating_sub(1)
                     ))));
                 }
             }
@@ -979,52 +980,69 @@ impl driver_common::ProtocolDriver for FinsDriver {
         Ok(())
     }
 
-    async fn read_cycle(&self) -> Result<(), driver_common::DynDriverError> {
-        // Delegate to internal implementation and convert the concrete driver error
-        // into the boxed `DynDriverError` used by the runtime abstraction.
-        self.run_read_cycle_impl()
-            .await
-            .map_err(|e| Box::new(e) as driver_common::DynDriverError)
-    }
-
-    async fn submit_write(
+    fn read_cycle(
         &self,
-        tag_id: &str,
-        value: core_model::TagValue,
-    ) -> Result<(), driver_common::DynDriverError> {
-        // Create a oneshot reply channel so the caller can wait for confirmation.
-        use tokio::sync::oneshot;
-        use tokio::time::{timeout, Duration};
-
-        let (tx, rx) = oneshot::channel::<Result<(), String>>();
-        let req = WriteRequest {
-            tag_id: tag_id.to_string(),
-            value,
-            reply: Some(tx),
-        };
-
-        // Enqueue the write request in the driver's write queue.
-        self.write_sender()
-            .send(req)
-            .await
-            .map_err(|e| Box::new(e) as driver_common::DynDriverError)?;
-
-        // Wait for reply (bounded).
-        match timeout(Duration::from_secs(5), rx).await {
-            Ok(Ok(Ok(()))) => Ok(()),
-            Ok(Ok(Err(msg))) => Err(Box::new(std::io::Error::other(msg))),
-            Ok(Err(_recv_err)) => Err(Box::new(std::io::Error::other("reply channel closed"))),
-            Err(_) => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "write confirmation timed out",
-            ))),
-        }
+    ) -> driver_common::DriverFuture<'_, Result<(), driver_common::DynDriverError>> {
+        Box::pin(async move {
+            // Delegate to internal implementation and convert the concrete driver error
+            // into the boxed `DynDriverError` used by the runtime abstraction.
+            self.run_read_cycle_impl()
+                .await
+                .map_err(|e| Box::new(e) as driver_common::DynDriverError)
+        })
     }
 
-    async fn health(&self) -> Result<Option<serde_json::Value>, driver_common::DynDriverError> {
-        // The FINS driver emits health events via a configured sender; there is no
-        // synchronous snapshot available at the moment, so return `None`.
-        Ok(None)
+    fn submit_write<'a>(
+        &'a self,
+        tag_id: &'a str,
+        value: core_model::TagValue,
+    ) -> driver_common::DriverFuture<'a, Result<(), driver_common::DynDriverError>> {
+        Box::pin(async move {
+            // Create a oneshot reply channel so the caller can wait for confirmation.
+            use tokio::sync::oneshot;
+            use tokio::time::{Duration, timeout};
+
+            let (tx, rx) = oneshot::channel::<Result<(), String>>();
+            let req = WriteRequest {
+                tag_id: tag_id.to_string(),
+                value,
+                reply: Some(tx),
+            };
+
+            // Enqueue the write request in the driver's write queue.
+            self.write_sender()
+                .send(req)
+                .await
+                .map_err(|e| Box::new(e) as driver_common::DynDriverError)?;
+
+            // Wait for reply (bounded).
+            let result: Result<(), driver_common::DynDriverError> =
+                match timeout(Duration::from_secs(5), rx).await {
+                    Ok(Ok(Ok(()))) => Ok(()),
+                    Ok(Ok(Err(msg))) => Err(Box::new(std::io::Error::other(msg))),
+                    Ok(Err(_recv_err)) => {
+                        Err(Box::new(std::io::Error::other("reply channel closed")))
+                    }
+                    Err(_) => Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "write confirmation timed out",
+                    ))),
+                };
+            result
+        })
+    }
+
+    fn health(
+        &self,
+    ) -> driver_common::DriverFuture<
+        '_,
+        Result<Option<serde_json::Value>, driver_common::DynDriverError>,
+    > {
+        Box::pin(async {
+            // The FINS driver emits health events via a configured sender; there is no
+            // synchronous snapshot available at the moment, so return `None`.
+            Ok(None)
+        })
     }
 }
 

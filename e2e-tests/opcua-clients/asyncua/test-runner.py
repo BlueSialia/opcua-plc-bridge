@@ -60,6 +60,14 @@ if EXPECT_BAD:
 failures = 0
 
 
+def value_only_uint16(value):
+    """Build a DataValue with only the Value field encoded for a data-source write."""
+    return ua.DataValue(
+        Value=ua.Variant(value, ua.VariantType.UInt16),
+        StatusCode=None,
+    )
+
+
 def fail(msg):
     global failures
     print(f"FAIL {msg}")
@@ -130,8 +138,7 @@ async def main():
         # Write a new value and wait for the subscription to fire.
         write_target = 0xCAFE if before == 0xBEEF else 0xBEEF
         print(f"  Writing {write_target} to {WRITE_TAG} ...")
-        dv = ua.DataValue(ua.Variant(write_target, ua.VariantType.UInt16))
-        await sub_node.write_value(dv)
+        await sub_node.write_value(value_only_uint16(write_target))
         print("  Write succeeded")
 
         await asyncio.sleep(1.5)
@@ -158,8 +165,7 @@ async def main():
         if not EXPECT_BAD:
             try:
                 node = client.get_node(WRITE_TAG)
-                dv = ua.DataValue(ua.Variant(WRITE_VALUE, ua.VariantType.UInt16))
-                await node.write_value(dv)
+                await node.write_value(value_only_uint16(WRITE_VALUE))
                 print(f"OK   write {WRITE_TAG} = {WRITE_VALUE}")
                 EXPECTED[WRITE_TAG] = {"type": "UInt16", "value": WRITE_VALUE}
             except Exception as e:

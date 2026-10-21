@@ -7,9 +7,10 @@
 
 #![warn(missing_docs)]
 
-use async_trait::async_trait;
 use core_model::{TagValue, WordOrder};
 use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
 
 /// Apply the configured `WordOrder` to a byte buffer in-place, then return the buffer.
 pub fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
@@ -21,6 +22,14 @@ pub fn apply_byte_order(mut bytes: Vec<u8>, order: &WordOrder) -> Vec<u8> {
 /// need a concrete error enum.
 pub type DynDriverError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+/// A boxed, sendable future returned by the asynchronous [`ProtocolDriver`]
+/// methods.
+///
+/// The trait is consumed through `dyn ProtocolDriver`, so its asynchronous
+/// methods return boxed futures instead of using `async fn`, which is not
+/// dyn-compatible.
+pub type DriverFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
 /// Trait implemented by protocol drivers so the runtime scheduler can poll them.
 ///
 /// This trait models the protocol-specific responsibilities: polling the PLC,
@@ -30,7 +39,6 @@ pub type DynDriverError = Box<dyn std::error::Error + Send + Sync + 'static>;
 ///
 /// Returning `DynDriverError` (a boxed dynamic error) keeps the trait lightweight
 /// and avoids forcing a particular error enum into this common crate.
-#[async_trait]
 pub trait ProtocolDriver: Send + Sync {
     /// Perform pre-flight validation of the driver configuration and mappings.
     ///
@@ -45,19 +53,23 @@ pub trait ProtocolDriver: Send + Sync {
     /// Implementations should perform a single logical iteration: connect if
     /// necessary, perform reads, apply updates to the `TagRegistry`, drain pending
     /// writes, emit health/events and then return.
-    async fn read_cycle(&self) -> Result<(), DynDriverError>;
+    fn read_cycle(&self) -> DriverFuture<'_, Result<(), DynDriverError>>;
 
     /// Submit a write for a single tag to be executed by the driver.
     ///
     /// `tag_id` is the runtime stable tag identifier (namespaced by runtime).
     /// `value` is the runtime `TagValue` representing the desired value.
-    async fn submit_write(&self, tag_id: &str, value: TagValue) -> Result<(), DynDriverError>;
+    fn submit_write<'a>(
+        &'a self,
+        tag_id: &'a str,
+        value: TagValue,
+    ) -> DriverFuture<'a, Result<(), DynDriverError>>;
 
     /// Optional health probe that drivers can implement to return JSON-serializable
     /// health information about the PLC/connection. The default implementation
     /// returns `Ok(None)`.
-    async fn health(&self) -> Result<Option<Value>, DynDriverError> {
-        Ok(None)
+    fn health(&self) -> DriverFuture<'_, Result<Option<Value>, DynDriverError>> {
+        Box::pin(async { Ok(None) })
     }
 }
 
@@ -66,24 +78,28 @@ mod tests {
     use super::*;
 
     struct DummyDriver;
-    #[async_trait]
+
     impl ProtocolDriver for DummyDriver {
         fn validate(&self) -> Result<(), DynDriverError> {
             Ok(())
         }
 
-        async fn read_cycle(&self) -> Result<(), DynDriverError> {
-            // No-op successful cycle
-            Ok(())
+        fn read_cycle(&self) -> DriverFuture<'_, Result<(), DynDriverError>> {
+            Box::pin(async {
+                // No-op successful cycle
+                Ok(())
+            })
         }
 
-        async fn submit_write(
-            &self,
-            _tag_id: &str,
+        fn submit_write<'a>(
+            &'a self,
+            _tag_id: &'a str,
             _value: TagValue,
-        ) -> Result<(), DynDriverError> {
-            // No-op write
-            Ok(())
+        ) -> DriverFuture<'a, Result<(), DynDriverError>> {
+            Box::pin(async {
+                // No-op write
+                Ok(())
+            })
         }
 
         // use default health()

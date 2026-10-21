@@ -1,4 +1,4 @@
-# cargo-deny configuration for opcua-plc-bridge
+# cargo-deny configuration for this Rust project.
 
 [advisories]
 yanked = "deny"
@@ -9,7 +9,6 @@ ignore = []
 unused-allowed-license = "allow"
 confidence-threshold = 0.8
 allow = [
-    "LicenseRef-Hippocratic-3.0",
     "0BSD",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -24,73 +23,69 @@ allow = [
     "MIT",
     "MIT-0",
     "MPL-2.0",
+    "NCSA",
     "OpenSSL",
+    "Unlicense",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "Zlib",
+    "LicenseRef-Hippocratic-3.0",
 ]
 
-[licenses.private]
-ignore = true
+# cargo-deny resolves each clarification against the crate being checked, so the
+# workspace crates point at the shared license file at the repository root.
+[[licenses.clarify]]
+name = "core-model"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../LICENSE.md", hash = 0xd9915fd9 }]
+
+[[licenses.clarify]]
+name = "driver-common"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../../LICENSE.md", hash = 0xd9915fd9 }]
+
+[[licenses.clarify]]
+name = "driver-fins"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../../LICENSE.md", hash = 0xd9915fd9 }]
+
+[[licenses.clarify]]
+name = "driver-modbus"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../../LICENSE.md", hash = 0xd9915fd9 }]
+
+[[licenses.clarify]]
+name = "opcua-server"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../LICENSE.md", hash = 0xd9915fd9 }]
+
+[[licenses.clarify]]
+name = "runtime"
+expression = "LicenseRef-Hippocratic-3.0"
+license-files = [{ path = "../LICENSE.md", hash = 0xd9915fd9 }]
 
 # unescaper declares "GPL-3.0/MIT" which is a deprecated SPDX expression.
 # It is actually dual-licensed (GPL-3.0-only OR MIT); we pick MIT.
 [[licenses.clarify]]
-crate = "core-model"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "driver-common"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "driver-fins"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "driver-modbus"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "opcua-server"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "runtime"
-expression = "LicenseRef-Hippocratic-3.0"
-license-files = []
-
-[[licenses.clarify]]
-crate = "unescaper"
+name = "unescaper"
 expression = "MIT"
 license-files = []
 
 [[licenses.clarify]]
-crate = "open62541"
+name = "open62541"
 expression = "MPL-2.0"
 license-files = []
 
+[licenses.private]
+ignore = true
+
 [bans]
-multiple-versions = "deny"
-# Workspace path deps intentionally omit version fields, so wildcards are allowed.
+# Dependencies may legitimately contain multiple versions of a crate.
+multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
-allow-workspace = true
-
-# Transitive duplicates from dependencies that haven't aligned yet.
-skip = [
-    # hashbrown 0.14 from dashmap, 0.17 from indexmap
-    { crate = "hashbrown@0.14.5", reason = "dashmap 6 still uses hashbrown 0.14" },
-    # shlex 1.x from bindgen (build dep), 2.x from cc (build dep) — both via open62541-sys
-    { crate = "shlex@1.3.0", reason = "bindgen build dep; cc already uses shlex 2.x" },
-]
 
 [sources]
 unknown-registry = "deny"

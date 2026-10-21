@@ -10,7 +10,15 @@ members = [
     "runtime",
 ]
 
-resolver = "2"
+resolver = "3"
+
+[workspace.package]
+version = "0.2.2"
+edition = "2024"
+description = "OPC UA bridge for PLCs with a protocol-agnostic tag model and Modbus/FINS drivers"
+license-file = "LICENSE.md"
+authors = ["Jorge Domínguez Arnáez"]
+repository = "https://github.com/BlueSialia/opcua-plc-bridge"
 
 [workspace.dependencies]
 core-model = { path = "core-model" }
@@ -19,13 +27,3 @@ driver-fins = { path = "driver/fins" }
 driver-modbus = { path = "driver/modbus" }
 opcua-server = { path = "opcua-server" }
 runtime = { path = "runtime" }
-
-[workspace.metadata]
-description = "OPC UA bridge for PLCs with protocol drivers and a unified core model."
-license = "Hippocratic License 3.0"
-repository = "https://github.com/BlueSialia/opcua-plc-bridge"
-
-[workspace.metadata.ci]
-recommended_rust_version = "1.70"
-rustfmt = true
-clippy = true

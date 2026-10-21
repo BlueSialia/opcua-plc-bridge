@@ -231,7 +231,7 @@ pub fn load_runtime_config(path: &Path, text: &str) -> Result<RuntimeConfig, Str
                     return Err(format!(
                         "Config parse failed: TOML error: {}; YAML error: {}",
                         toml_err, yaml_err
-                    ))
+                    ));
                 }
             },
         },

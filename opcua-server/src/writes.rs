@@ -8,8 +8,8 @@
 //! The trait returns a boxed future to avoid forcing implementors to depend on
 //! `async_trait` while remaining fully async-friendly.
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use std::fmt;
 use std::sync::Arc;
 

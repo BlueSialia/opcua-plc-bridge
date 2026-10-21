@@ -1,7 +1,7 @@
 //! Native open62541-backed OPC UA server implementation.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use open62541::ua;
@@ -440,7 +440,7 @@ pub fn start_native_server(
         Err(_) => {
             return Err(ServerError::Other(
                 "start_native_server must be called from a Tokio runtime context".into(),
-            ))
+            ));
         }
     };
 
@@ -450,31 +450,33 @@ pub fn start_native_server(
     let write_handler_clone = write_handler.clone();
     let processing_thread = std::thread::Builder::new()
         .name("opcua-write-bridge".into())
-        .spawn(move || loop {
-            match bridge_rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(bw) => {
-                    let tag_id = bw.tag_id.clone();
-                    let value = bw.value.clone();
-                    let reply = bw.reply;
+        .spawn(move || {
+            loop {
+                match bridge_rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(bw) => {
+                        let tag_id = bw.tag_id.clone();
+                        let value = bw.value.clone();
+                        let reply = bw.reply;
 
-                    let req = WriteRequest {
-                        tag_id: tag_id.clone(),
-                        value: value.clone(),
-                    };
+                        let req = WriteRequest {
+                            tag_id: tag_id.clone(),
+                            value: value.clone(),
+                        };
 
-                    let fut = write_handler_clone.handle_write(req);
-                    let res = tokio_handle.block_on(fut);
+                        let fut = write_handler_clone.handle_write(req);
+                        let res = tokio_handle.block_on(fut);
 
-                    if let Some(tx) = reply {
-                        let _ = tx.send(res.map_err(|e| format!("{}", e)));
+                        if let Some(tx) = reply {
+                            let _ = tx.send(res.map_err(|e| format!("{}", e)));
+                        }
                     }
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    if write_bridge_shutdown_signal.load(Ordering::Relaxed) {
-                        break;
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if write_bridge_shutdown_signal.load(Ordering::Relaxed) {
+                            break;
+                        }
                     }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
         })
         .map_err(|e| ServerError::Other(format!("Failed to spawn write bridge thread: {}", e)))?;
@@ -646,8 +648,8 @@ mod tests {
     use crate::config::WriteMode;
     use core_model::{TagDataType, TagDefinition, TagRegistry, TagValue};
     use open62541::ua;
-    use std::sync::mpsc;
     use std::sync::Arc;
+    use std::sync::mpsc;
     use std::time::Duration;
 
     /// Simulate a FINS-like tag data source.

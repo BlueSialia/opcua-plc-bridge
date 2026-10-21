@@ -7,8 +7,8 @@
 //! Unit tests that depend on internal types (e.g. `BridgeWrite`, `TagDataSource`)
 //! live in `src/native.rs` as inline `#[cfg(test)]` modules.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use opcua_server::SecurityPolicy;

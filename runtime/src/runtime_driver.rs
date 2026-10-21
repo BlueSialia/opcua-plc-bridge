@@ -7,7 +7,7 @@ use std::time::Duration;
 use chrono::Duration as ChronoDuration;
 use core_model::{TagQuality, TagRegistry};
 use driver_common::ProtocolDriver;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{debug, error, info, warn};
@@ -249,31 +249,29 @@ impl RuntimeDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_trait::async_trait;
     use core_model::TagValue;
-    use driver_common::DynDriverError;
+    use driver_common::{DriverFuture, DynDriverError};
     use serde_json::json;
     use std::time::Duration;
     use tokio::sync::mpsc;
 
     struct DummyProtoDriver;
 
-    #[async_trait]
     impl ProtocolDriver for DummyProtoDriver {
-        async fn read_cycle(&self) -> Result<(), DynDriverError> {
-            Ok(())
+        fn read_cycle(&self) -> DriverFuture<'_, Result<(), DynDriverError>> {
+            Box::pin(async { Ok(()) })
         }
 
-        async fn submit_write(
-            &self,
-            _tag_id: &str,
+        fn submit_write<'a>(
+            &'a self,
+            _tag_id: &'a str,
             _value: TagValue,
-        ) -> Result<(), DynDriverError> {
-            Ok(())
+        ) -> DriverFuture<'a, Result<(), DynDriverError>> {
+            Box::pin(async { Ok(()) })
         }
 
-        async fn health(&self) -> Result<Option<JsonValue>, DynDriverError> {
-            Ok(Some(json!({"uptime": 42})))
+        fn health(&self) -> DriverFuture<'_, Result<Option<JsonValue>, DynDriverError>> {
+            Box::pin(async { Ok(Some(json!({"uptime": 42}))) })
         }
     }
 

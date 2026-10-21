@@ -337,7 +337,6 @@ dependencies = [
 name = "driver-common"
 version = "0.2.2"
 dependencies = [
- "async-trait",
  "core-model",
  "serde_json",
  "tokio",
@@ -347,7 +346,6 @@ dependencies = [
 name = "driver-fins"
 version = "0.2.2"
 dependencies = [
- "async-trait",
  "byteorder",
  "bytes",
  "chrono",
@@ -364,7 +362,6 @@ dependencies = [
 name = "driver-modbus"
 version = "0.2.2"
 dependencies = [
- "async-trait",
  "byteorder",
  "chrono",
  "core-model",
@@ -892,7 +889,6 @@ name = "runtime"
 version = "0.2.2"
 dependencies = [
  "anyhow",
- "async-trait",
  "chrono",
  "clap",
  "core-model",

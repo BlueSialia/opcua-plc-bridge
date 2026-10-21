@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time;
 

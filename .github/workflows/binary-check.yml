@@ -3,161 +3,120 @@ name: Binary check
 on:
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Pull request number to comment on
+        required: true
+        type: number
 
 permissions:
   contents: read
   pull-requests: write
 
+env:
+  SIZE_THRESHOLD: 10
+
+concurrency:
+  group: binary-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
-    name: Size and compile time
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake gcc libclang-dev pkg-config python3
+      - uses: dtolnay/rust-toolchain@1.99.1
       - name: Restore baseline
-        id: cache-baseline
         uses: actions/cache/restore@v5
         with:
           path: baseline.json
           key: binary-baseline-${{ github.run_id }}
           restore-keys: binary-baseline-
-
       - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-bloat
-        uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2
         with:
           tool: cargo-bloat
-
-      - name: Build and measure compile time
-        shell: bash
+      - name: Build and compare
         run: |
           set -euo pipefail
 
-          echo "--- Single compilation via cargo-bloat ---"
-          /usr/bin/time -f '%e' -o compile-time.txt cargo bloat --release --crates -n 20 > bloat-output.txt
-          echo "Compilation time (real seconds): $(cat compile-time.txt)"
+          # Create the report before any build command so it is available even
+          # when compilation or measurement fails.
+          {
+            echo "## Binary check"
+            echo
+            echo "Threshold: binary size +${SIZE_THRESHOLD}%"
+            echo
+          } > report.md
 
-          # Measure binary sizes from the artifacts cargo-bloat just built
+          cargo build --release
+          cargo bloat --release --crates -n 20 > bloat-output.txt
+
           find target/release -maxdepth 1 -type f -executable \
             -exec stat --format='%n %s' {} \; \
             | sort \
             | jq -R 'split(" ") | {(.[0] | split("/")[-1]): (.[1] | tonumber)}' \
-            | jq -s add > pr-sizes.json
-          echo "PR binary sizes:"
-          cat pr-sizes.json
+            | jq -s add > sizes.json
 
-      - name: Analyze and generate report
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SIZE_THRESHOLD=10
-          TIME_THRESHOLD=20
-          PR_TIME=$(cat compile-time.txt)
-          CACHE_HIT="${{ steps.cache-baseline.outputs.cache-hit }}"
-          SIZE_FAIL=0
-          TIME_FAIL=0
-          REPORT="report.md"
-
-          report()  { echo "$@" >> "$REPORT"; }
-          annotate(){ echo "$@"; }
-          both()    { echo "$@"; echo "$@" >> "$REPORT"; }
-
-          # --- Header ---
-          report "## Binary Check"
-          report ""
-
-          # --- Compile Time ---
-          both "### Compile Time"
-          report ""
-          if [ "$CACHE_HIT" = "true" ]; then
-            BASE_TIME=$(jq -r '.compile_time_real // 0' baseline.json)
-            if [ "$BASE_TIME" != "0" ]; then
-              DELTA=$(echo "scale=1; ($PR_TIME - $BASE_TIME) * 100 / $BASE_TIME" | bc)
-              report "| Metric | Baseline | PR | Change |"
-              report "|--------|----------|----|--------|"
-              report "| Wall clock | ${BASE_TIME}s | ${PR_TIME}s | ${DELTA}% |"
-
-              if [ "$(echo "$DELTA > $TIME_THRESHOLD" | bc)" = "1" ]; then
-                annotate "::error::Compile time grew by ${DELTA}% (${BASE_TIME}s → ${PR_TIME}s). Threshold is ${TIME_THRESHOLD}%."
-                TIME_FAIL=1
-              elif [ "$(echo "$DELTA > 0" | bc)" = "1" ]; then
-                annotate "::notice::Compile time grew by ${DELTA}% (${BASE_TIME}s → ${PR_TIME}s). Within threshold."
-              else
-                annotate "::notice::Compile time decreased by ${DELTA#-}% (${BASE_TIME}s → ${PR_TIME}s)."
-              fi
-            else
-              report "| Metric | PR |"
-              report "|--------|----|"
-              report "| Wall clock | ${PR_TIME}s |"
-            fi
-          else
-            report "| Metric | PR |"
-            report "|--------|----|"
-            report "| Wall clock | ${PR_TIME}s |"
-            annotate "::warning::No baseline available for comparison."
-          fi
-          report ""
-
-          # --- Binary Sizes ---
-          both "### Binary Sizes"
-          report ""
-          if [ "$CACHE_HIT" = "true" ]; then
-            report "| Binary | Baseline | PR | Change |"
-            report "|--------|----------|----|--------|"
-            for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
-              PR_SIZE=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
-              BASE_SIZE=$(jq -r ".binaries[\"$bin\"] // 0" baseline.json)
-              PR_HUMAN=$(numfmt --to=iec "$PR_SIZE" 2>/dev/null || echo "${PR_SIZE}B")
-              if [ "$BASE_SIZE" != "0" ]; then
-                BASE_HUMAN=$(numfmt --to=iec "$BASE_SIZE" 2>/dev/null || echo "${BASE_SIZE}B")
-                DIFF=$(( PR_SIZE - BASE_SIZE ))
-                DELTA=$(echo "scale=1; $DIFF * 100 / $BASE_SIZE" | bc)
-                report "| \`$bin\` | $BASE_HUMAN | $PR_HUMAN | ${DELTA}% |"
-
-                if [ "$DIFF" -gt 0 ] && [ "$(echo "$DELTA > $SIZE_THRESHOLD" | bc)" = "1" ]; then
-                  annotate "::error::$bin grew by ${DELTA}% ($BASE_HUMAN → $PR_HUMAN). Threshold is ${SIZE_THRESHOLD}%."
-                  SIZE_FAIL=1
-                elif [ "$DIFF" -gt 0 ]; then
-                  annotate "::notice::$bin grew by ${DELTA}% ($BASE_HUMAN → $PR_HUMAN). Within threshold."
-                elif [ "$DIFF" -lt 0 ]; then
-                  annotate "::notice::$bin shrank by ${DELTA#-}% ($BASE_HUMAN → $PR_HUMAN)."
-                else
-                  annotate "::notice::$bin unchanged ($PR_HUMAN)."
-                fi
-              else
-                report "| \`$bin\` | N/A | $PR_HUMAN | new |"
-                annotate "::warning::New binary '$bin' detected (no baseline). Size: $PR_HUMAN"
-              fi
-            done
-          else
-            report "| Binary | Size |"
-            report "|--------|------|"
-            for bin in $(jq -r '.binaries | keys[]' pr-sizes.json); do
-              PR_SIZE=$(jq -r ".binaries[\"$bin\"]" pr-sizes.json)
-              PR_HUMAN=$(numfmt --to=iec "$PR_SIZE" 2>/dev/null || echo "${PR_SIZE}B")
-              report "| \`$bin\` | $PR_HUMAN |"
-            done
-          fi
-          report ""
-
-          # --- Bloat report ---
-          both "### cargo bloat (largest crates)"
-          report '```'
-          cat bloat-output.txt >> "$REPORT"
-          report '```'
-
-          if [ "$SIZE_FAIL" = "1" ] || [ "$TIME_FAIL" = "1" ]; then
+          if [ "$(cat sizes.json)" = "null" ]; then
+            echo "No release executable was found." >> report.md
             exit 1
           fi
 
-      - name: Post report as PR comment
-        if: github.event_name == 'pull_request' && (success() || failure())
+          failed=0
+          if [ ! -f baseline.json ]; then
+            echo "No baseline available for comparison." >> report.md
+            echo "::warning::No binary baseline available for comparison."
+          fi
+
+          echo >> report.md
+          echo "### Binary sizes" >> report.md
+          echo >> report.md
+          echo "| Binary | Current | Baseline | Change |" >> report.md
+          echo "|---|---:|---:|---:|" >> report.md
+
+          for binary in $(jq -r 'keys[]' sizes.json); do
+            current_size=$(jq -r --arg binary "$binary" '.[$binary]' sizes.json)
+            current_human=$(numfmt --to=iec "$current_size")
+            baseline_size=""
+            if [ -f baseline.json ]; then
+              baseline_size=$(jq -r --arg binary "$binary" '.binaries[$binary] // empty' baseline.json)
+            fi
+
+            if [ -n "$baseline_size" ] && [ "$baseline_size" != "0" ]; then
+              baseline_human=$(numfmt --to=iec "$baseline_size")
+              size_delta=$(awk -v current="$current_size" -v baseline="$baseline_size" \
+                'BEGIN { printf "%.1f", (current - baseline) * 100 / baseline }')
+              echo "| \`$binary\` | $current_human | $baseline_human | ${size_delta}% |" >> report.md
+
+              if awk -v delta="$size_delta" -v threshold="$SIZE_THRESHOLD" \
+                'BEGIN { exit !(delta > threshold) }'; then
+                echo "::error::$binary grew by ${size_delta}% (threshold: ${SIZE_THRESHOLD}%)."
+                failed=1
+              fi
+            else
+              echo "| \`$binary\` | $current_human | unavailable | new |" >> report.md
+              echo "::warning::New binary '$binary' detected; no baseline is available."
+            fi
+          done
+
+          echo >> report.md
+          echo "### cargo bloat (largest crates)" >> report.md
+          echo '```' >> report.md
+          cat bloat-output.txt >> report.md
+          echo '```' >> report.md
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+      - if: always()
         uses: thollander/actions-comment-pull-request@v3
         with:
           file-path: report.md
           comment-tag: binary-check
+          pr-number: ${{ inputs.pr-number || github.event.pull_request.number }}

@@ -5,9 +5,9 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
+use crate::LoginCallback;
 use crate::config::OpcUaConfig;
 use crate::error::ServerError;
-use crate::LoginCallback;
 use core_model::TagRegistry;
 
 /// Handle returned when the server is started. It can be used to stop the server

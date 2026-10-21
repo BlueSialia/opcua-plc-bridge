@@ -1,7 +1,6 @@
 //! Modbus/TCP driver: connects to a Modbus server, performs read cycles, handles writes,
 //! updates the TagRegistry and emits health events.
 
-use async_trait::async_trait;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::Utc;
 use core_model::{TagDataType, TagQuality, TagRegistry, TagValue, WordOrder};
@@ -10,7 +9,7 @@ use std::io::Cursor;
 
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::time;
 use tokio_modbus::prelude::*;
 use tracing::{debug, error, instrument, warn};
@@ -25,7 +24,7 @@ pub type ClientContext = tokio_modbus::client::Context;
 
 use tokio_modbus::slave::Slave;
 
-use driver_common::{DynDriverError, ProtocolDriver};
+use driver_common::{DriverFuture, DynDriverError, ProtocolDriver};
 
 /// Modbus driver holding connection state and interacting with the TagRegistry.
 pub struct ModbusDriver {
@@ -886,7 +885,6 @@ pub fn tagvalue_to_registers(value: &TagValue) -> Result<Vec<u16>, DriverError> 
     }
 }
 
-#[async_trait]
 impl ProtocolDriver for ModbusDriver {
     fn validate(&self) -> Result<(), DynDriverError> {
         use std::collections::HashMap;
@@ -968,47 +966,59 @@ impl ProtocolDriver for ModbusDriver {
         Ok(())
     }
 
-    async fn read_cycle(&self) -> Result<(), DynDriverError> {
-        // Delegate to the internal implementation and convert the concrete DriverError
-        // into the boxed DynDriverError used by the runtime abstraction.
-        self.run_read_cycle_impl()
-            .await
-            .map_err(|e| Box::new(e) as DynDriverError)
+    fn read_cycle(&self) -> DriverFuture<'_, Result<(), DynDriverError>> {
+        Box::pin(async move {
+            // Delegate to the internal implementation and convert the concrete DriverError
+            // into the boxed DynDriverError used by the runtime abstraction.
+            self.run_read_cycle_impl()
+                .await
+                .map_err(|e| Box::new(e) as DynDriverError)
+        })
     }
 
-    async fn submit_write(&self, tag_id: &str, value: TagValue) -> Result<(), DynDriverError> {
-        use tokio::sync::oneshot;
-        use tokio::time::{timeout, Duration};
+    fn submit_write<'a>(
+        &'a self,
+        tag_id: &'a str,
+        value: TagValue,
+    ) -> DriverFuture<'a, Result<(), DynDriverError>> {
+        Box::pin(async move {
+            use tokio::sync::oneshot;
+            use tokio::time::{Duration, timeout};
 
-        // Create oneshot reply channel for confirmation
-        let (tx, rx) = oneshot::channel::<Result<(), String>>();
-        let req = WriteRequest {
-            tag_id: tag_id.to_string(),
-            value,
-            reply: Some(tx),
-        };
+            // Create oneshot reply channel for confirmation
+            let (tx, rx) = oneshot::channel::<Result<(), String>>();
+            let req = WriteRequest {
+                tag_id: tag_id.to_string(),
+                value,
+                reply: Some(tx),
+            };
 
-        // Enqueue the request
-        self.write_tx
-            .send(req)
-            .await
-            .map_err(|e| Box::new(e) as DynDriverError)?;
+            // Enqueue the request
+            self.write_tx
+                .send(req)
+                .await
+                .map_err(|e| Box::new(e) as DynDriverError)?;
 
-        // Wait for confirmation (bounded)
-        match timeout(Duration::from_secs(5), rx).await {
-            Ok(Ok(Ok(()))) => Ok(()),
-            Ok(Ok(Err(msg))) => Err(Box::new(std::io::Error::other(msg))),
-            Ok(Err(_)) => Err(Box::new(std::io::Error::other("reply channel closed"))),
-            Err(_) => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "write confirmation timed out",
-            ))),
-        }
+            // Wait for confirmation (bounded)
+            let result: Result<(), DynDriverError> = match timeout(Duration::from_secs(5), rx).await
+            {
+                Ok(Ok(Ok(()))) => Ok(()),
+                Ok(Ok(Err(msg))) => Err(Box::new(std::io::Error::other(msg))),
+                Ok(Err(_)) => Err(Box::new(std::io::Error::other("reply channel closed"))),
+                Err(_) => Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "write confirmation timed out",
+                ))),
+            };
+            result
+        })
     }
 
-    async fn health(&self) -> Result<Option<serde_json::Value>, DynDriverError> {
-        // No synchronous health snapshot available; health events are emitted via the optional sender.
-        Ok(None)
+    fn health(&self) -> DriverFuture<'_, Result<Option<serde_json::Value>, DynDriverError>> {
+        Box::pin(async {
+            // No synchronous health snapshot available; health events are emitted via the optional sender.
+            Ok(None)
+        })
     }
 }
 

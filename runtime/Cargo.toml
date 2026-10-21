@@ -1,13 +1,13 @@
 [package]
 name = "runtime"
-version = "0.2.2"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 description = "Runtime coordinator: loads configuration, spawns protocol drivers, starts OPC UA server and exposes health & lifecycle management."
-license = "Hippocratic License 3.0"
-repository = "https://github.com/BlueSialia/opcua-plc-bridge"
+license-file.workspace = true
+repository.workspace = true
 documentation = "https://github.com/BlueSialia/opcua-plc-bridge/blob/main/runtime"
-authors = ["Jorge Domínguez Arnáez (BlueSialia) <bluesialia@gmail.com>"]
+authors.workspace = true
 readme = "../README.md"
 
 # This crate is the application entrypoint (binary)
@@ -25,7 +25,6 @@ opcua-server.workspace = true
 
 # Async runtime and utilities
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
-async-trait = "0.1"
 
 # Configuration parsing (support TOML and YAML)
 serde = { version = "1.0", features = ["derive"] }

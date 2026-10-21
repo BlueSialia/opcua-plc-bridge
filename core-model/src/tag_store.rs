@@ -5,7 +5,7 @@
 //! a snapshot.
 
 use std::collections::HashMap;
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, RwLock};
 
 use arc_swap::ArcSwap;

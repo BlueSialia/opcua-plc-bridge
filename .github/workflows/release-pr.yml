@@ -1,0 +1,108 @@
+name: Release PR
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: true
+
+jobs:
+  release-pr:
+    name: Create release PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-edit,git-cliff
+      - name: Determine next version
+        id: version
+        env:
+          # The workspace has no root package, so select the release package explicitly.
+          PACKAGE: "runtime"
+        run: |
+          set -euo pipefail
+
+          metadata="$(cargo metadata --format-version 1 --no-deps)"
+
+          if [ -n "$PACKAGE" ]; then
+            package="$(jq -c --arg name "$PACKAGE" 'first(.packages[] | select(.name == $name)) // empty' <<<"$metadata")"
+          else
+            package="$(jq -c --arg manifest "$GITHUB_WORKSPACE/Cargo.toml" '
+              if (.packages | length) == 1 then .packages[0]
+              else first(.packages[] | select(.manifest_path == $manifest)) // empty
+              end
+            ' <<<"$metadata")"
+          fi
+
+          if [ -z "$package" ]; then
+            echo "::error::Could not determine the package to release. Set PACKAGE to one of:"
+            jq -r '.packages[].name' <<<"$metadata"
+            exit 1
+          fi
+
+          name="$(jq -r '.name' <<<"$package")"
+          current="$(jq -r '.version' <<<"$package")"
+
+          last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          synthetic_tag=""
+          if [ -z "$last_tag" ]; then
+            # git-cliff needs a previous tag to calculate a bump. Tag the root
+            # commit locally so the first release is based on the current version.
+            synthetic_tag="v${current}"
+            git tag "$synthetic_tag" "$(git rev-list --max-parents=0 HEAD | tail -n1)"
+          fi
+
+          next="$(git cliff --bumped-version)"
+
+          if [ -n "$synthetic_tag" ]; then
+            git tag -d "$synthetic_tag" >/dev/null
+          fi
+          next="${next#v}"
+
+          if [ "$next" = "$current" ] || [ "$(printf '%s\n%s\n' "$current" "$next" | sort -V | tail -n1)" != "$next" ]; then
+            echo "No release is needed."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "release=true"
+              echo "name=$name"
+              echo "version=$next"
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Bump workspace versions
+        if: steps.version.outputs.release == 'true'
+        run: cargo set-version --workspace "${{ steps.version.outputs.version }}"
+      - name: Update changelog
+        if: steps.version.outputs.release == 'true'
+        run: git cliff --tag "v${{ steps.version.outputs.version }}" -o CHANGELOG.md
+      - name: Open or update release PR
+        id: cpr
+        if: steps.version.outputs.release == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: release"
+          branch: release/auto
+          title: "chore: release"
+          body: "Automated release PR."
+          labels: release
+          delete-branch: true
+      - name: Trigger checks on the release PR
+        if: steps.version.outputs.release == 'true' && steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci.yml --ref release/auto
+          gh workflow run binary-check.yml --ref release/auto -f pr-number="${{ steps.cpr.outputs.pull-request-number }}"
+          gh workflow run security.yml --ref release/auto
