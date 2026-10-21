@@ -270,7 +270,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "core-model"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -335,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "driver-common"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "core-model",
  "serde_json",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "driver-fins"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "byteorder",
  "bytes",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "driver-modbus"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "byteorder",
  "chrono",
@@ -709,7 +709,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opcua-server"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "chrono",
  "core-model",
@@ -886,7 +886,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "runtime"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "chrono",
