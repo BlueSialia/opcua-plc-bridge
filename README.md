@@ -169,7 +169,7 @@ You can run the unit tests with:
 cargo test --workspace --lib --bins
 ```
 
-Tests are located in each source file (inline `#[cfg(test)]` modules).
+Unit tests are located in each source file (inline `#[cfg(test)]` modules).
 
 ### Integration Tests
 
@@ -279,7 +279,7 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/BlueSialia/opcua-plc-bridge/tags).
+We use [SemVer](https://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/BlueSialia/opcua-plc-bridge/tags).
 
 ## Authors
 
